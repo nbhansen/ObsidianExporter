@@ -9,6 +9,7 @@ from pathlib import Path
 
 from src.domain.vault_analyzer import VaultAnalyzer
 from src.infrastructure.file_system import FileSystemAdapter
+from src.infrastructure.parsers.wikilink_parser import WikiLinkParser
 
 
 class TestVaultDetectionIntegration:
@@ -23,7 +24,10 @@ class TestVaultDetectionIntegration:
         # Given: The real test vault path
         vault_path = Path("data/_obsidian")
         file_system = FileSystemAdapter()
-        analyzer = VaultAnalyzer(file_system=file_system)
+        wikilink_parser = WikiLinkParser()
+        analyzer = VaultAnalyzer(
+            file_system=file_system, wikilink_parser=wikilink_parser
+        )
 
         # When: We check if it's a valid vault
         result = analyzer.is_valid_vault(vault_path)
@@ -47,7 +51,10 @@ class TestVaultDetectionIntegration:
         # Given: The real test vault path
         vault_path = Path("data/_obsidian")
         file_system = FileSystemAdapter()
-        analyzer = VaultAnalyzer(file_system=file_system)
+        wikilink_parser = WikiLinkParser()
+        analyzer = VaultAnalyzer(
+            file_system=file_system, wikilink_parser=wikilink_parser
+        )
 
         # When: We scan the real vault
         result = analyzer.scan_vault(vault_path)

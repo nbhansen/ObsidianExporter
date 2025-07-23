@@ -27,7 +27,13 @@ class TestVaultAnalyzer:
         mock_file_system = Mock()
         mock_file_system.directory_exists.return_value = True
 
-        analyzer = VaultAnalyzer(file_system=mock_file_system)
+        mock_wikilink_parser = Mock()
+        # Return empty list by default
+        mock_wikilink_parser.extract_from_file.return_value = []
+
+        analyzer = VaultAnalyzer(
+            file_system=mock_file_system, wikilink_parser=mock_wikilink_parser
+        )
 
         # When: We check if it's a valid vault
         result = analyzer.is_valid_vault(vault_path)
@@ -47,7 +53,13 @@ class TestVaultAnalyzer:
         mock_file_system = Mock()
         mock_file_system.directory_exists.return_value = False
 
-        analyzer = VaultAnalyzer(file_system=mock_file_system)
+        mock_wikilink_parser = Mock()
+        # Return empty list by default
+        mock_wikilink_parser.extract_from_file.return_value = []
+
+        analyzer = VaultAnalyzer(
+            file_system=mock_file_system, wikilink_parser=mock_wikilink_parser
+        )
 
         # When: We check if it's a valid vault
         result = analyzer.is_valid_vault(vault_path)
@@ -67,7 +79,13 @@ class TestVaultAnalyzer:
         mock_file_system = Mock()
         mock_file_system.directory_exists.return_value = False
 
-        analyzer = VaultAnalyzer(file_system=mock_file_system)
+        mock_wikilink_parser = Mock()
+        # Return empty list by default
+        mock_wikilink_parser.extract_from_file.return_value = []
+
+        analyzer = VaultAnalyzer(
+            file_system=mock_file_system, wikilink_parser=mock_wikilink_parser
+        )
 
         # When: We check if it's a valid vault
         result = analyzer.is_valid_vault(vault_path)
@@ -100,7 +118,13 @@ class TestVaultAnalyzer:
             ],
         ]
 
-        analyzer = VaultAnalyzer(file_system=mock_file_system)
+        mock_wikilink_parser = Mock()
+        # Return empty list by default
+        mock_wikilink_parser.extract_from_file.return_value = []
+
+        analyzer = VaultAnalyzer(
+            file_system=mock_file_system, wikilink_parser=mock_wikilink_parser
+        )
 
         # When: We scan the vault for files
         result = analyzer.scan_vault(vault_path)
@@ -143,7 +167,13 @@ class TestVaultAnalyzer:
             ],
         ]
 
-        analyzer = VaultAnalyzer(file_system=mock_file_system)
+        mock_wikilink_parser = Mock()
+        # Return empty list by default
+        mock_wikilink_parser.extract_from_file.return_value = []
+
+        analyzer = VaultAnalyzer(
+            file_system=mock_file_system, wikilink_parser=mock_wikilink_parser
+        )
 
         # When: We scan the vault for files
         result = analyzer.scan_vault(vault_path)
@@ -171,7 +201,13 @@ class TestVaultAnalyzer:
         mock_file_system = Mock()
         mock_file_system.directory_exists.return_value = False
 
-        analyzer = VaultAnalyzer(file_system=mock_file_system)
+        mock_wikilink_parser = Mock()
+        # Return empty list by default
+        mock_wikilink_parser.extract_from_file.return_value = []
+
+        analyzer = VaultAnalyzer(
+            file_system=mock_file_system, wikilink_parser=mock_wikilink_parser
+        )
 
         # When/Then: Scanning should raise a ValueError
         with pytest.raises(ValueError, match="not a valid Obsidian vault"):
@@ -187,7 +223,13 @@ class TestVaultAnalyzer:
         mock_file_system.directory_exists.return_value = True
         mock_file_system.list_files.return_value = []
 
-        analyzer = VaultAnalyzer(file_system=mock_file_system)
+        mock_wikilink_parser = Mock()
+        # Return empty list by default
+        mock_wikilink_parser.extract_from_file.return_value = []
+
+        analyzer = VaultAnalyzer(
+            file_system=mock_file_system, wikilink_parser=mock_wikilink_parser
+        )
 
         # When: We scan the empty vault
         result = analyzer.scan_vault(vault_path)
@@ -198,3 +240,62 @@ class TestVaultAnalyzer:
         assert result.asset_files == []
         assert result.links == {}
         assert result.metadata == {}
+
+    def test_scan_vault_extracts_wikilinks_from_markdown_files(self):
+        """
+        Test that scan_vault extracts wikilinks from markdown files.
+
+        Should populate links dictionary. Following TDD Red phase.
+        """
+        # Given: A valid vault with markdown files containing wikilinks
+        vault_path = Path("/test/vault")
+        mock_file_system = Mock()
+        mock_file_system.directory_exists.return_value = True
+        mock_file_system.list_files.side_effect = [
+            # First call for markdown files
+            [
+                Path("/test/vault/note1.md"),
+                Path("/test/vault/note2.md"),
+            ],
+            # Second call for all files (markdown + assets)
+            [
+                Path("/test/vault/note1.md"),
+                Path("/test/vault/note2.md"),
+                Path("/test/vault/image.png"),
+            ],
+        ]
+
+        # Mock wikilink parser to return specific wikilinks for each file
+        mock_wikilink_parser = Mock()
+        mock_wikilinks_note1 = [
+            Mock(target="Target Note", original="[[Target Note]]"),
+            Mock(target="Another Note", original="[[Another Note|Alias]]"),
+        ]
+        mock_wikilinks_note2 = [
+            Mock(target="Third Note", original="[[Third Note]]"),
+        ]
+        mock_wikilink_parser.extract_from_file.side_effect = [
+            mock_wikilinks_note1,  # For note1.md
+            mock_wikilinks_note2,  # For note2.md
+        ]
+
+        analyzer = VaultAnalyzer(
+            file_system=mock_file_system, wikilink_parser=mock_wikilink_parser
+        )
+
+        # When: We scan the vault
+        result = analyzer.scan_vault(vault_path)
+
+        # Then: The links dictionary should be populated with wikilinks from each file
+        expected_links = {
+            "note1.md": ["Target Note", "Another Note"],
+            "note2.md": ["Third Note"],
+        }
+        assert result.links == expected_links
+
+        # And: The wikilink parser should be called for each markdown file
+        expected_parser_calls = [
+            call(Path("/test/vault/note1.md")),
+            call(Path("/test/vault/note2.md")),
+        ]
+        mock_wikilink_parser.extract_from_file.assert_has_calls(expected_parser_calls)

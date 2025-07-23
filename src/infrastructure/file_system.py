@@ -24,6 +24,10 @@ class FileSystemPort(Protocol):
         """List files in a directory matching the given pattern."""
         ...
 
+    def read_file_content(self, path: Path) -> str:
+        """Read the content of a file as a string."""
+        ...
+
 
 class FileSystemAdapter:
     """Concrete file system adapter using pathlib."""
@@ -41,3 +45,7 @@ class FileSystemAdapter:
         if not self.directory_exists(path):
             return []
         return list(path.glob(pattern))
+
+    def read_file_content(self, path: Path) -> str:
+        """Read the content of a file as a string."""
+        return path.read_text(encoding="utf-8")

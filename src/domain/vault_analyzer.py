@@ -6,9 +6,17 @@ following hexagonal architecture with dependency injection.
 """
 
 from pathlib import Path
-from typing import Protocol
+from typing import List, Protocol
 
 from .models import VaultStructure
+
+
+class WikiLinkParserPort(Protocol):
+    """Port interface for wikilink parsing operations."""
+
+    def extract_from_file(self, file_path: Path) -> List:
+        """Extract wikilinks from a markdown file."""
+        ...
 
 
 class FileSystemPort(Protocol):
@@ -18,13 +26,24 @@ class FileSystemPort(Protocol):
         """Check if a directory exists at the given path."""
         ...
 
+    def list_files(self, path: Path, pattern: str = "*") -> List[Path]:
+        """List files in a directory matching the given pattern."""
+        ...
+
+    def read_file_content(self, path: Path) -> str:
+        """Read the content of a file as a string."""
+        ...
+
 
 class VaultAnalyzer:
     """Domain service for analyzing Obsidian vaults."""
 
-    def __init__(self, file_system: FileSystemPort) -> None:
-        """Initialize with injected file system dependency."""
+    def __init__(
+        self, file_system: FileSystemPort, wikilink_parser: WikiLinkParserPort
+    ) -> None:
+        """Initialize with injected dependencies."""
         self._file_system = file_system
+        self._wikilink_parser = wikilink_parser
 
     def is_valid_vault(self, vault_path: Path) -> bool:
         """
@@ -73,10 +92,18 @@ class VaultAnalyzer:
             and not str(f).startswith(str(vault_path / ".obsidian"))
         ]
 
+        # Extract wikilinks from each markdown file
+        links = {}
+        for md_file in markdown_files:
+            file_wikilinks = self._wikilink_parser.extract_from_file(md_file)
+            # Extract target from each wikilink and store by filename
+            file_targets = [link.target for link in file_wikilinks]
+            links[md_file.name] = file_targets
+
         return VaultStructure(
             path=vault_path,
             markdown_files=markdown_files,
             asset_files=asset_files,
-            links={},  # Will be populated in later phase
+            links=links,
             metadata={},  # Will be populated in later phase
         )
