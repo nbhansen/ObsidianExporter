@@ -61,20 +61,19 @@ AppFlowy uses a Flutter frontend with Rust backend, storing documents as JSON wi
 
 **Core dependencies:**
 - **Runtime**: Python 3.8+ for excellent text processing and file handling
-- **Markdown parsing**: `markdown-it-py` or `mistune` for AST manipulation
+- **Markdown parsing**: `python-markdown` with custom WikiLink extension for AST-based parsing
 - **YAML processing**: `PyYAML` for frontmatter extraction
 - **File operations**: `pathlib` and `shutil` (built-in) for cross-platform compatibility
 - **CLI framework**: `click` for argument parsing and user interaction
-- **Regex**: Built-in `re` module for wikilink pattern matching
 
 **Processing pipeline:**
-Python's excellent text processing capabilities make it ideal for markdown transformation:
+Python's excellent text processing capabilities combined with AST-based parsing make it ideal for reliable markdown transformation:
 
 ```python
-import re
 from pathlib import Path
-from markdown_it import MarkdownIt
+import markdown
 import yaml
+from src.infrastructure.parsers.wikilink_parser import WikiLinkParser
 
 def process_obsidian_file(file_path: Path) -> dict:
     content = file_path.read_text(encoding='utf-8')
@@ -82,21 +81,62 @@ def process_obsidian_file(file_path: Path) -> dict:
     # Extract frontmatter
     frontmatter, body = extract_yaml_frontmatter(content)
     
-    # Parse markdown to AST
-    md = MarkdownIt()
-    tokens = md.parse(body)
+    # AST-based wikilink extraction (context-aware)
+    parser = WikiLinkParser()
+    wikilinks = parser.extract_wikilinks(body)
     
-    # Transform content
-    transformed = transform_wikilinks(body)
+    # Transform content using markdown AST
+    md = markdown.Markdown(extensions=['wikilink_extension'])
+    transformed = transform_wikilinks(body, wikilinks)
     transformed = transform_callouts(transformed)
     transformed = extract_tags(transformed)
     
     return {
         'metadata': frontmatter,
         'content': transformed,
+        'wikilinks': wikilinks,
         'assets': find_asset_references(body)
     }
 ```
+
+### Architectural Decision: AST-Based Wikilink Parsing
+
+**Problem:** Obsidian wikilinks (`[[Note]]`, `[[Note|Alias]]`, etc.) require reliable extraction from markdown content while respecting context (code blocks should be ignored).
+
+**Solution:** Custom Python-Markdown extension with AST-based inline processor instead of regex patterns.
+
+**Key Benefits:**
+- **Context Awareness**: Automatically ignores wikilinks in code blocks and inline code
+- **Reliability**: Handles complex nested structures and edge cases consistently  
+- **Maintainability**: Clean separation between parsing logic and business logic
+- **Extensibility**: Easy to add support for new wikilink variants
+
+**Implementation Approach:**
+```python
+class WikiLinkExtension(Extension):
+    """Python-Markdown extension for parsing Obsidian wikilinks."""
+    
+    def extendMarkdown(self, md):
+        # Register inline processor for wikilink patterns
+        wikilink_pattern = WikiLinkInlineProcessor(r'!?\\[\\[[^\\]]+\\]\\]', md)
+        md.inlinePatterns.register(wikilink_pattern, 'wikilink', 175)
+
+class WikiLinkInlineProcessor(InlineProcessor):
+    """AST-based processor handling all wikilink variants."""
+    
+    def handleMatch(self, m, data):
+        # Parse: [[target#header^block|alias]] or ![[embed]]
+        # Returns: WikiLink(target, alias, header, block_id, is_embed)
+        return self._parse_wikilink_content(m.group(0))
+```
+
+**Supported Variants:**
+- `[[Note]]` - Basic wikilink
+- `[[Note|Alias]]` - With display alias  
+- `[[Note#Header]]` - Section reference
+- `[[Note^block-id]]` - Block reference
+- `![[Note]]` - Embedded content
+- Complex combinations like `[[Note#Header|Alias]]`
 
 ### Core conversion steps
 
@@ -162,7 +202,25 @@ class VaultIndex:
 def resolve_wikilink(link: str, current_path: Path, vault: VaultIndex) -> str:
     """Resolve wikilink following Obsidian's precedence rules."""
     # Remove any heading/block references
-    clean_link = re.sub(r'[#^].*
+    clean_link = re.sub(r'[#^].*$', '', link)
+    
+    # Try exact path first
+    if clean_link in vault.paths:
+        return clean_link
+    
+    # Try filename match
+    if clean_link in vault.files:
+        return vault.files[clean_link]
+    
+    # Try with .md extension
+    md_link = f"{clean_link}.md"
+    if md_link in vault.paths:
+        return md_link
+    
+    # No match found
+    print(f"Warning: Broken link '{link}' in {current_path}")
+    return f"#broken-link-{clean_link}"
+```
 
 ### Content transformation mappings
 
@@ -289,8 +347,8 @@ class AppFlowyPackage:
 
 **Phase 1: Core Parser** (Week 1-2)
 - Vault detection and file scanning using `pathlib`
-- Basic markdown parsing with `markdown-it-py`
-- Wikilink extraction using regex patterns
+- AST-based wikilink parsing with Python-Markdown custom extension
+- Wikilink extraction with context awareness (ignores code blocks)
 - Asset inventory generation
 
 **Phase 2: Content Transformation** (Week 3-4)
@@ -310,144 +368,6 @@ class AppFlowyPackage:
 - Edge case handling with Python's robust exception system
 - Performance optimization using generators for large vaults
 - Documentation and usage examples
-
-## Success criteria
-
-- Successfully convert 90%+ of standard markdown content
-- Resolve 95%+ of internal wikilinks correctly
-- Preserve all assets with updated references
-- Generate importable AppFlowy packages
-- Process typical vault (100-500 notes) in under 2 minutes
-- Provide clear conversion reports
-
-This MVP focuses on the essential conversion pipeline while maintaining architectural soundness for future enhancements. The CLI-first approach prioritizes functionality over user experience, enabling rapid development and testing., '', link)
-    
-    # Try exact path first
-    if clean_link in vault.paths:
-        return clean_link
-    
-    # Try filename match
-    if clean_link in vault.files:
-        return vault.files[clean_link]
-    
-    # Try with .md extension
-    md_link = f"{clean_link}.md"
-    if md_link in vault.paths:
-        return md_link
-    
-    # No match found
-    print(f"Warning: Broken link '{link}' in {current_path}")
-    return f"#broken-link-{clean_link}"
-```
-
-### Content transformation mappings
-
-**Wikilinks to markdown links:**
-- `[[Note]]` → `[Note](Note.md)`
-- `[[Note|Alias]]` → `[Alias](Note.md)`
-- `[[Note#Header]]` → `[Note#Header](Note.md#header)`
-
-**Callouts to AppFlowy blocks:**
-- `> [!info]` → `> **Info:** ` (quoted block with emphasis)
-- `> [!warning]` → `> ⚠️ **Warning:** `
-- `> [!note]` → `> 📝 **Note:** `
-
-**Block references:**
-- `^block-id` → Convert to HTML comment `<!-- block: block-id -->`
-- `[[Note^block-id]]` → `[Note (see block-id)](Note.md)`
-
-**Metadata handling:**
-- YAML frontmatter → AppFlowy properties
-- `tags: [tag1, tag2]` → AppFlowy tag system
-- `aliases: [alias1]` → Note title variations
-
-### File structure and data flow
-
-```
-obsidian-to-appflowy/
-├── src/
-│   ├── parser/           # Obsidian vault parsing
-│   ├── transformer/      # Content conversion logic
-│   ├── generator/        # AppFlowy package creation
-│   └── cli.ts           # Command-line interface
-├── dist/                # Compiled output
-└── output/              # Generated AppFlowy packages
-```
-
-**Data flow:**
-1. **VaultParser** → `VaultStructure` (files, links, metadata)
-2. **ContentTransformer** → `TransformedContent` (converted markdown, assets)
-3. **PackageGenerator** → `appflowy-import.zip` (importable package)
-
-### Error handling and validation
-
-**Graceful degradation:**
-- Unknown callout types → generic quoted blocks
-- Complex transclusions → simplified links with notes
-- Plugin-specific syntax → HTML comments preserving original
-
-**Validation checks:**
-- Verify all internal links resolve
-- Confirm asset files exist
-- Check for circular references
-- Validate generated JSON structure
-
-**Reporting:**
-- Summary of files processed
-- List of broken/ambiguous links
-- Conversion warnings and limitations
-- Asset migration status
-
-## MVP scope and limitations
-
-### Included features
-- Basic markdown conversion (headers, lists, tables, code blocks)
-- Wikilink resolution and conversion
-- Simple callout transformation
-- Asset copying and path rewriting
-- YAML frontmatter to properties mapping
-- ZIP package generation for manual import
-
-### Excluded from MVP
-- Complex plugin syntax (Dataview, Templater)
-- Canvas file conversion
-- Graph view recreation
-- Real-time sync capabilities
-- GUI interface
-- Advanced template processing
-
-### Known limitations
-- No graph visualization in AppFlowy
-- Limited callout type mapping
-- Block references lose interactive functionality
-- Some formatting may require manual adjustment
-- Large vaults may need chunked processing
-
-## Development phases
-
-**Phase 1: Core Parser** (Week 1-2)
-- Vault detection and file scanning
-- Basic markdown parsing with remark
-- Wikilink extraction and resolution
-- Asset inventory generation
-
-**Phase 2: Content Transformation** (Week 3-4)
-- Wikilink to markdown link conversion
-- Callout transformation
-- Metadata extraction and mapping
-- Basic error handling
-
-**Phase 3: Package Generation** (Week 5-6)
-- AppFlowy JSON document creation
-- ZIP package assembly
-- Asset bundling
-- CLI interface and reporting
-
-**Phase 4: Testing and Refinement** (Week 7-8)
-- Test with various vault structures
-- Edge case handling
-- Performance optimization
-- Documentation
 
 ## Success criteria
 
