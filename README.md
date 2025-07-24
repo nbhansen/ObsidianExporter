@@ -1,6 +1,6 @@
 # ObsidianExporter
 
-Converts Obsidian vaults to importable packages for AppFlowy, Notion, and Outline. Preserves markdown content, wikilinks, assets, and folder structure.
+Converts Obsidian vaults to importable packages for AppFlowy, Notion, and Outline. Preserves markdown content, internal document links, assets, and folder structure.
 
 ## Problem
 
@@ -76,7 +76,9 @@ python -m src.cli convert ~/Documents/MyVault --format outline --output ~/Deskto
 ## What gets converted
 
 - **Markdown files**: Content preserved with syntax transformation
-- **Wikilinks**: `[[Page Name]]` → proper links for target system
+- **Internal links**: `[[Page Name]]` → working document links in target system
+- **Link aliases**: `[[Document|Display Text]]` → preserves custom display text
+- **Case-insensitive linking**: Links work regardless of case differences
 - **Assets**: Images and attachments copied to package
 - **Callouts**: Obsidian callouts → equivalent formats where supported
 - **Block references**: `^block-id` → target system format

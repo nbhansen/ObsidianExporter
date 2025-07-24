@@ -15,7 +15,7 @@ This project provides a migration tool for transferring Obsidian knowledge bases
 - **Handle metadata**: Convert YAML frontmatter and tags to target system properties
 - **Provide verification**: Generate reports showing what was converted and any limitations
 
-**Success definition:** A CLI tool that can process typical Obsidian vaults (100-1000 notes) and create importable packages for each target system with 90%+ content fidelity and functional internal linking.
+**Success definition:** A CLI tool that can process typical Obsidian vaults (100-1000 notes) and create importable packages for each target system with 90%+ content fidelity and fully functional internal document linking that preserves the knowledge graph structure.
 
 **Non-goals:** This tool focuses on one-time migration, not ongoing synchronization. Complex plugin-specific syntax, real-time collaboration features, and bidirectional sync are explicitly out of scope.
 
@@ -172,7 +172,7 @@ class VaultIndex {
 **Wikilinks transformation by format:**
 - **AppFlowy**: `[[Note]]` → Internal page references
 - **Notion**: `[[Note]]` → `[Note](./Note.md)`
-- **Outline**: `[[Note]]` → ProseMirror link nodes
+- **Outline**: `[[Note]]` → ProseMirror link marks with `/doc/urlId` hrefs for working internal links
 
 **Callouts by format:**
 - **AppFlowy**: `> [!info]` → Callout blocks with styling
@@ -353,7 +353,7 @@ class ObsidianImportTask extends APIImportTask {
 ## Success criteria
 
 - Successfully convert 90%+ of standard markdown content
-- Resolve 95%+ of internal wikilinks correctly
+- Convert wikilinks to functional internal document links that preserve navigation structure
 - Preserve all assets with updated Outline URLs
 - Maintain folder structure as collection/document hierarchy
 - Process typical vault (100-500 notes) reliably through queue system
