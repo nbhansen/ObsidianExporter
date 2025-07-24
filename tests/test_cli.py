@@ -72,11 +72,10 @@ class TestCLI:
 
             runner = CliRunner()
             with tempfile.TemporaryDirectory() as vault_dir:
-                result = runner.invoke(convert_command, [
-                    vault_dir,
-                    "--output", str(output_path),
-                    "--name", "Test Export"
-                ])
+                result = runner.invoke(
+                    convert_command,
+                    [vault_dir, "--output", str(output_path), "--name", "Test Export"],
+                )
 
                 assert result.exit_code == 0
                 assert "success" in result.output.lower()
@@ -106,10 +105,9 @@ class TestCLI:
 
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as vault_dir:
-            result = runner.invoke(convert_command, [
-                vault_dir,
-                "--output", "/tmp/export.zip"
-            ])
+            result = runner.invoke(
+                convert_command, [vault_dir, "--output", "/tmp/export.zip"]
+            )
 
             assert result.exit_code != 0
             assert "failed" in result.output.lower() or "error" in result.output.lower()
@@ -137,11 +135,9 @@ class TestCLI:
 
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as vault_dir:
-            result = runner.invoke(convert_command, [
-                vault_dir,
-                "--output", "/tmp/export.zip",
-                "--verbose"
-            ])
+            result = runner.invoke(
+                convert_command, [vault_dir, "--output", "/tmp/export.zip", "--verbose"]
+            )
 
             assert result.exit_code == 0
             # Should capture progress messages from the progress callback
@@ -172,10 +168,7 @@ class TestCLI:
 
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as vault_dir:
-            result = runner.invoke(convert_command, [
-                vault_dir,
-                "--validate-only"
-            ])
+            result = runner.invoke(convert_command, [vault_dir, "--validate-only"])
 
             assert result.exit_code == 0
             assert "validation" in result.output.lower()
@@ -189,13 +182,15 @@ class TestCLI:
         Should display error message and return error exit code.
         """
         runner = CliRunner()
-        result = runner.invoke(convert_command, [
-            "/nonexistent/vault/path",
-            "--output", "/tmp/export.zip"
-        ])
+        result = runner.invoke(
+            convert_command, ["/nonexistent/vault/path", "--output", "/tmp/export.zip"]
+        )
 
         assert result.exit_code != 0
-        assert "not found" in result.output.lower() or "does not exist" in result.output.lower()
+        assert (
+            "not found" in result.output.lower()
+            or "does not exist" in result.output.lower()
+        )
 
     @patch("src.cli.create_export_use_case")
     def test_convert_command_with_custom_output_name(self, mock_create_use_case):
@@ -213,11 +208,16 @@ class TestCLI:
 
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as vault_dir:
-            result = runner.invoke(convert_command, [
-                vault_dir,
-                "--output", "/tmp/custom.zip",
-                "--name", "My Custom Export"
-            ])
+            result = runner.invoke(
+                convert_command,
+                [
+                    vault_dir,
+                    "--output",
+                    "/tmp/custom.zip",
+                    "--name",
+                    "My Custom Export",
+                ],
+            )
 
             assert result.exit_code == 0
             mock_use_case.export_vault.assert_called_once()
@@ -247,11 +247,9 @@ class TestCLI:
 
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as vault_dir:
-            result = runner.invoke(convert_command, [
-                vault_dir,
-                "--output", "/tmp/export.zip",
-                "--verbose"
-            ])
+            result = runner.invoke(
+                convert_command, [vault_dir, "--output", "/tmp/export.zip", "--verbose"]
+            )
 
             assert result.exit_code == 0
             assert "Scanning vault" in result.output
@@ -278,10 +276,9 @@ class TestCLI:
                         success=True, output_path=output_path
                     )
 
-                    result = runner.invoke(convert_command, [
-                        vault_dir,
-                        "--output", str(output_path)
-                    ])
+                    result = runner.invoke(
+                        convert_command, [vault_dir, "--output", str(output_path)]
+                    )
 
                     # Should succeed
                     assert result.exit_code == 0
@@ -326,10 +323,9 @@ class TestCLI:
 
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as vault_dir:
-            result = runner.invoke(convert_command, [
-                vault_dir,
-                "--output", "/tmp/detailed-export.zip"
-            ])
+            result = runner.invoke(
+                convert_command, [vault_dir, "--output", "/tmp/detailed-export.zip"]
+            )
 
             assert result.exit_code == 0
             assert "Files processed: 10" in result.output
@@ -337,4 +333,3 @@ class TestCLI:
             assert "3 warnings" in result.output
             assert "2.5" in result.output  # Processing time
             assert "1 broken link" in result.output
-

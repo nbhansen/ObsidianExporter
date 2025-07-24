@@ -130,9 +130,7 @@ class ExportUseCase:
 
             for md_file in vault_structure.markdown_files:
                 try:
-                    self._report_progress(
-                        config, f"Processing {md_file.name}..."
-                    )
+                    self._report_progress(config, f"Processing {md_file.name}...")
                     # Read file content
                     markdown_content = self.file_system.read_file_content(md_file)
 
@@ -157,9 +155,7 @@ class ExportUseCase:
                 try:
                     document = self.document_generator.generate_document(transformed)
                     # Add filename for package generation
-                    document["name"] = (
-                        transformed.original_path.stem + ".json"
-                    )
+                    document["name"] = transformed.original_path.stem + ".json"
                     appflowy_documents.append(document)
 
                 except Exception as e:
@@ -244,9 +240,7 @@ class ExportUseCase:
 
         return broken_links
 
-    def _report_progress(
-        self, config: ExportConfig, message: str
-    ) -> None:
+    def _report_progress(self, config: ExportConfig, message: str) -> None:
         """
         Report progress using callback if provided.
 
@@ -256,4 +250,3 @@ class ExportUseCase:
         """
         if config.progress_callback:
             config.progress_callback(message)
-

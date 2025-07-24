@@ -1,209 +1,237 @@
-# Obsidian to AppFlowy Exporter: Development Plan
+# Obsidian to Outline Export - Implementation Plan
 
-## 📊 Progress Overview
+## TODO: High Priority Tasks
+- [x] Research current codebase structure and understand existing patterns
+- [ ] Create OutlinePackage domain model
+- [ ] Create ProseMirrorDocument domain model  
+- [ ] Implement ProseMirrorDocumentGenerator for markdown conversion
+- [ ] Implement OutlineDocumentGenerator
+- [ ] Implement OutlinePackageGenerator for ZIP creation
+- [ ] Create OutlineExportUseCase
+- [ ] Update CLI to support --format outline
+- [ ] Write unit tests for new components
+- [ ] Write integration tests with real vault data
+- [ ] Test generated JSON import in Outline instance
 
-**Current Phase:** Phase 3 - AppFlowy Package Generation 🎯 **COMPLETED**  
-**Test Coverage:** 95%+ (142 tests passing)  
-**Architecture:** Hexagonal with dependency injection  
-**Code Quality:** ✅ All linting/formatting checks pass  
+## Codebase Analysis Results
 
-**Phase 1 Completed:** ✅
-1. ✅ Implement file scanning functionality (markdown files discovery)
-2. ✅ Add wikilink extraction using AST-based parsing with Python-Markdown
-3. ✅ Integrate wikilink extraction with VaultAnalyzer scan_vault method
-4. ✅ Real vault testing with actual Obsidian test data
+### Current Architecture (Hexagonal/Clean)
+The existing codebase follows excellent hexagonal architecture patterns with comprehensive test coverage (81%):
 
-**Phase 2 Completed:** ✅
-1. ✅ Three-stage wikilink resolution algorithm (VaultIndexBuilder + WikiLinkResolver)
-2. ✅ ContentTransformer domain service for markdown processing
-3. ✅ CalloutParser for all 27 Obsidian callout types with emoji transformation
-4. ✅ YAML frontmatter extraction and processing
-5. ✅ CalloutParser integration into ContentTransformer pipeline
-6. ✅ BlockReferenceHandler for `^block-id` processing
-7. ✅ LLM abstraction layer for Gemini integration (Stage 3 fuzzy matching)
+**Domain Layer** (`src/domain/`):
+- **Immutable Models**: `VaultStructure`, `TransformedContent`, `VaultIndex`, `ResolvedWikiLink`, `AppFlowyPackage`, `NotionPackage`
+- **Domain Services**: `VaultAnalyzer`, `ContentTransformer`, `WikiLinkResolver`, `VaultIndexBuilder`
+- **Document Generators**: `AppFlowyDocumentGenerator`, `NotionDocumentGenerator`
 
-**Phase 3 Completed:** ✅
-1. ✅ AppFlowyDocumentGenerator for markdown to AppFlowy JSON conversion
-2. ✅ AppFlowyPackageGenerator for ZIP package assembly
-3. ✅ config.json manifest generation for AppFlowy template import
-4. ✅ Asset bundling with corrected relative paths
-5. ✅ Complete integration pipeline (markdown → AppFlowy JSON → ZIP)
-6. ✅ Package validation and real vault data testing
-7. ✅ Empty file preservation (no data loss)
+**Application Layer** (`src/application/`):
+- **Use Cases**: `ExportUseCase`, `NotionExportUseCase` - orchestrate domain services
+- **Configuration Objects**: Immutable config and result dataclasses
+- **Progress Reporting**: Callback-based progress tracking
 
-## Project Overview
+**Infrastructure Layer** (`src/infrastructure/`):
+- **Adapters**: `FileSystemAdapter` for I/O operations
+- **Parsers**: `WikilinkParser`, `CalloutParser`, `BlockReferenceParser` (AST-based, not regex)
+- **Package Generators**: `AppFlowyPackageGenerator`, `NotionPackageGenerator` (ZIP creation)
+- **LLM Providers**: `GeminiProvider` for optional fuzzy matching
 
-Build a Python CLI tool that converts Obsidian vaults to AppFlowy-importable ZIP packages, focusing on content preservation, wikilink conversion, and asset migration.
+**CLI Layer** (`src/cli.py`):
+- Click-based CLI with comprehensive error handling
+- Support for multiple formats (`--format appflowy|notion`)
+- Validation-only mode and progress reporting
 
-## Architecture & Key Decisions
+### Current Export Capabilities
+1. **AppFlowy Template Format**: Original JSON-based template system
+2. **Notion Format**: ZIP packages for AppFlowy's Notion import feature
 
-### Technology Stack
+### Sophisticated Content Processing
+- **3-Stage Wikilink Resolution**: Exact path → filename match → LLM fuzzy matching
+- **Content Transformation**: Markdown parsing, callout conversion, frontmatter handling
+- **Asset Management**: Copy and relink all images/attachments
+- **Progress Reporting**: Real-time feedback with callbacks
 
-- **Python 3.8+** with virtual environment (as mandated by CLAUDE.md)
-- **Python-Markdown** with custom WikiLink extension for AST-based parsing (avoids regex pitfalls)
-- **Click** for CLI interface
-- **PyYAML** for frontmatter processing
-- **Pathlib/shutil** for file operations
-- **Zipfile** for package creation
+### Key Patterns to Follow
 
-### Project Structure (following SPEC.md)
-
-```
-src/
-├── domain/              # Core business logic (hexagonal architecture)
-│   ├── models.py       # Data classes (VaultStructure, TransformedContent, etc.)
-│   ├── vault_analyzer.py  # Vault analysis logic
-│   └── content_transformer.py  # Transformation rules
-├── infrastructure/     # External dependencies
-│   ├── parsers/        # Obsidian vault parsing
-│   ├── generators/     # AppFlowy package creation
-│   └── file_system.py  # File operations
-├── application/        # Use cases and orchestration
-│   └── export_use_case.py
-└── cli.py             # Command-line interface
-```
-
-## Development Phases (TDD Approach)
-
-### Phase 1: Foundation & Core Parser ✅ **COMPLETED**
-**Built:** Hexagonal architecture, vault detection, file scanning, AST-based wikilink extraction with 93.43% test coverage
-
-### Phase 2: Content Transformation Engine ✅ **COMPLETED**
-
-**Goals:** Wikilink resolution algorithm, callout transformation, YAML frontmatter processing, block reference handling
-
-**Key Features:**
-- Three-stage wikilink resolution (exact path → filename → fuzzy matching)
-- Callout transformation (`> [!info]` → `> **Info:**` with emoji)
-- YAML frontmatter → AppFlowy properties mapping
-- Block reference handling (`^block-id` → HTML comments)
-
-### Phase 3: AppFlowy Package Generation ✅ **COMPLETED**
-
-**Goals:** AppFlowy JSON document generation, ZIP package assembly, asset bundling
-
-**Key Features:**
-- JSON documents with proper node structure (type, children, delta)
-- config.json manifest for template import
-- Asset bundling with corrected relative paths
-- ZIP package compatible with AppFlowy's template import
-
-**Implementation Delivered:**
-- **AppFlowyDocumentGenerator**: Converts `TransformedContent` to AppFlowy JSON format
-  - Handles all markdown elements: headings, paragraphs, lists, code blocks, images, tables
-  - Supports metadata conversion to AppFlowy properties
-  - Delta format conversion for rich text formatting
-  - Empty file preservation (generates empty paragraphs to avoid data loss)
-- **AppFlowyPackageGenerator**: Creates ZIP packages compatible with AppFlowy import
-  - Generates proper `config.json` manifest with template metadata
-  - Asset bundling with corrected relative paths
-  - Filename conflict resolution
-  - Package structure validation
-- **Complete Integration**: Full pipeline from markdown → AppFlowy JSON → ZIP package
-- **28 comprehensive tests** covering all functionality with TDD approach
-- **Real data validation** using actual Obsidian vault from `/data/_obsidian/`
-
-### Phase 4: CLI & Validation (Week 7-8)
-
-**Goals:** Click-based CLI interface, progress reporting, error handling, performance optimization
-
-**Key Features:**
-- Command-line argument parsing and help
-- Progress reporting during conversion
-- Detailed conversion report (success/failures/warnings)
-- Broken link detection and reporting
-- Performance optimization for large vaults
-
-## Critical Implementation Details
-
-### Architectural Decision: AST-Based Parsing vs Regex
-
-**Decision:** Use Python-Markdown with custom WikiLinkExtension for AST-based parsing instead of regex patterns.
-
-**Rationale:**
-- **Context Awareness**: AST parsing respects markdown structure (code blocks, inline code)
-- **Reliability**: Avoids complex regex edge cases and escaping issues  
-- **Maintainability**: Easier to extend and debug than regex patterns
-- **Standards Compliance**: Leverages proven Python-Markdown infrastructure
-
-**Implementation:**
+**Immutable Domain Models** (all frozen dataclasses):
 ```python
-class WikiLinkInlineProcessor(InlineProcessor):
-    """AST-based processor for Obsidian wikilinks."""
-    
-    def handleMatch(self, m, data):
-        # Extract and parse wikilink components
-        full_match = m.group(0)
-        is_embed = full_match.startswith('!')
-        content = full_match[3:-2] if is_embed else full_match[2:-2]
-        
-        # Parse components: target, alias, header, block_id
-        return self._parse_wikilink_content(full_match, content, is_embed)
+@dataclass(frozen=True)
+class VaultStructure:
+    path: Path
+    markdown_files: List[Path]
+    asset_files: List[Path]
+    links: Dict[str, List[str]]
+    metadata: Dict[str, Dict[str, Any]]
 ```
 
-**Benefits Realized:**
-- Handles all wikilink variants: `[[Note]]`, `[[Note|Alias]]`, `[[Note#Header]]`, `[[Note^block-id]]`, `![[Embed]]`
-- Ignores wikilinks in code blocks and inline code automatically
-- 100% test coverage on wikilink extraction with 12 comprehensive tests
-- Clean separation of parsing logic from business logic
-
-### Wikilink Resolution Strategy
-
+**Dependency Injection Pattern**:
 ```python
-# Three-stage resolution following Obsidian's precedence
-1. Exact path match: [[folder/note]] → check exact path
-2. Filename match: [[note]] → search vault for note.md  
-3. Fuzzy match: Handle casing/spacing variations
+class NotionExportUseCase:
+    def __init__(
+        self,
+        vault_analyzer: VaultAnalyzer,
+        vault_index_builder: VaultIndexBuilder,
+        content_transformer: ContentTransformer,
+        notion_document_generator: NotionDocumentGenerator,
+        notion_package_generator: NotionPackageGenerator,
+        file_system: FileSystemAdapter,
+    ):
 ```
 
-### AppFlowy JSON Structure
-
+**Use Case Orchestration Pattern**:
 ```python
+def export(self, config: NotionExportConfig) -> NotionExportResult:
+    # Stage 1: Analyze vault structure
+    # Stage 2: Build vault index 
+    # Stage 3: Transform content
+    # Stage 4: Generate documents
+    # Stage 5: Create package
+```
+
+## Outline JSON Import Format Analysis
+
+Based on exploration of `/home/nicolai/dev/outline`, the Outline JSON import expects:
+
+### File Structure:
+```
+export.zip
+├── metadata.json                 # Export metadata
+├── Collection Name.json          # One JSON file per collection
+└── uploads/                      # Attachments directory
+    └── [attachment-files]
+```
+
+### Key JSON Structures:
+
+**metadata.json**:
+```json
 {
-  "document": {
-    "type": "page",
-    "children": [
+  "exportVersion": 1,
+  "version": "0.78.0-0", 
+  "createdAt": "2024-07-18T18:18:14.221Z",
+  "createdById": "user-uuid",
+  "createdByEmail": "user@example.com"
+}
+```
+
+**Collection JSON Structure**:
+```json
+{
+  "collection": {
+    "id": "collection-uuid",
+    "urlId": "short-id",
+    "name": "Collection Name", 
+    "data": { /* ProseMirror doc for description */ },
+    "documentStructure": [
       {
-        "type": "heading",
-        "data": {
-          "delta": [{"insert": "Hello AppFlowy!"}],
-          "level": 1
-        }
+        "id": "doc-uuid",
+        "url": "/doc/doc-title-short-id", 
+        "title": "Document Title",
+        "children": []
       }
     ]
+  },
+  "documents": {
+    "doc-uuid": {
+      "id": "doc-uuid",
+      "title": "Document Title",
+      "data": { /* ProseMirror document structure */ },
+      "createdAt": "2024-07-18T18:03:41.622Z",
+      // ... other metadata
+    }
+  },
+  "attachments": {
+    "attachment-uuid": {
+      "id": "attachment-uuid", 
+      "documentId": "doc-uuid",
+      "contentType": "image/jpeg",
+      "name": "filename.jpg",
+      "key": "uploads/path/to/file.jpg"
+    }
   }
 }
 ```
 
-### Content Transformation Mappings
+**ProseMirror Document Format**:
+```json
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text", 
+          "text": "Some text content"
+        }
+      ]
+    }
+  ]
+}
+```
 
-- `[[Note]]` → `[Note](Note.md)`
-- `[[Note|Alias]]` → `[Alias](Note.md)`  
-- `> [!info]` → `> **Info:**` with emoji
-- `^block-id` → `<!-- block: block-id -->`
+## Implementation Strategy
+
+### Phase 1: Domain Models
+Add to `src/domain/models.py`:
+- `OutlinePackage` - Immutable package representation
+- `ProseMirrorDocument` - Domain model for ProseMirror format
+- `OutlineCollection` - Collection structure with document hierarchy
+- `OutlineDocument` - Individual document with metadata
+- `OutlineAttachment` - Attachment reference
+
+### Phase 2: Content Conversion  
+Create `src/domain/prosemirror_document_generator.py`:
+- Convert markdown AST to ProseMirror JSON nodes
+- Handle all standard markdown elements (paragraphs, headings, lists, etc.)
+- Map Obsidian callouts to appropriate ProseMirror blocks
+- Process images and attachment references
+
+### Phase 3: Infrastructure Layer
+Create `src/infrastructure/generators/outline_package_generator.py`:
+- Generate ZIP with proper structure (metadata.json, collection JSONs, uploads/)
+- Handle UUID generation for all entities
+- Manage attachment copying and reference updates
+
+### Phase 4: Application Layer
+Create `src/application/outline_export_use_case.py`:
+- Follow exact same pattern as existing use cases
+- Orchestrate vault analysis → content transformation → Outline generation → ZIP creation
+- Comprehensive error handling and progress reporting
+
+### Phase 5: CLI Integration
+Update `src/cli.py`:
+- Add `--format outline` option
+- Wire up new use case with dependency injection
+- Maintain consistent user experience
+
+## Technical Challenges & Solutions
+
+### 1. Markdown to ProseMirror Conversion
+**Challenge**: Convert parsed markdown AST to ProseMirror's node structure
+**Solution**: Create systematic mapping for each markdown element type with proper nesting
+
+### 2. Document Hierarchy Management  
+**Challenge**: Map Obsidian folder structure to Outline's collection/document hierarchy
+**Solution**: Build document structure tree and represent as nested NavigationNode array
+
+### 3. Asset Reference Updates
+**Challenge**: Update image/attachment references to use Outline's attachment API format
+**Solution**: Track attachments during processing and update references to use `/api/attachments.redirect?id=uuid` format
+
+### 4. UUID Generation & Consistency
+**Challenge**: Generate proper UUIDs for all entities and maintain references
+**Solution**: Use Python's `uuid4()` and maintain mapping dictionary during processing
 
 ## Success Criteria
+- [ ] Generate valid Outline JSON import files from Obsidian vaults
+- [ ] Successfully import generated files into running Outline instance  
+- [ ] Preserve 90%+ of content fidelity including formatting and structure
+- [ ] Handle all asset types (images, PDFs, etc.) with proper references
+- [ ] Maintain existing code quality standards (81% test coverage, clean architecture)
+- [ ] Process typical vault (100-500 notes) reliably through existing pipeline
 
-- 90%+ standard markdown content conversion
-- 95%+ wikilink resolution accuracy
-- All assets preserved with updated references
-- Generate importable AppFlowy ZIP packages
-- Process typical vault (100-500 notes) under 2 minutes
-- Comprehensive conversion reporting
-
-## Risk Mitigation
-
-- **Wikilink complexity**: Use proven Python-Markdown WikiLinks extension instead of custom markdown-it-py plugin
-- **AppFlowy format changes**: Focus on documented template import format
-- **Performance**: Use generators for large vault processing
-- **Quality**: Strict TDD with 80%+ test coverage as mandated by CLAUDE.md
-
-## Development Standards (per CLAUDE.md)
-
-- All code in virtual environment
-- TDD with failing tests first
-- Type hints on all functions
-- Ruff linting + formatting (zero tolerance)
-- Hexagonal architecture with dependency injection
-- No global state, immutable objects
-- 80%+ test coverage requirement
+## Next Steps
+1. Start with domain models (`OutlinePackage`, `ProseMirrorDocument`)
+2. Implement ProseMirror conversion logic
+3. Build package generator following existing patterns
+4. Create use case following dependency injection patterns
+5. Test with real vault data and Outline import

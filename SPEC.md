@@ -1,24 +1,23 @@
-# Obsidian to AppFlowy Import Tool: MVP Technical Specification
+# Obsidian Export Tool: Technical Specification
 
 ## Project overview and objectives
 
-This project addresses a specific migration need: transferring a large Obsidian knowledge base to AppFlowy while preserving content structure, internal links, and metadata relationships.
+This project provides a migration tool for transferring Obsidian knowledge bases to multiple target systems: AppFlowy, Notion (via AppFlowy import), and Outline. The tool preserves content structure, internal links, and metadata relationships across different platform formats.
 
-**The migration challenge:** Obsidian vaults often contain hundreds or thousands of interconnected markdown files with complex internal linking, embedded media, metadata, and custom formatting. Manual migration would be prohibitively time-consuming and error-prone, while the structural differences between platforms make direct file copying impossible.
+**The migration challenge:** Obsidian vaults often contain hundreds or thousands of interconnected markdown files with complex internal linking, embedded media, metadata, and custom formatting. Manual migration would be time-consuming and error-prone, while the structural differences between platforms make direct file copying impossible.
 
 **Core objectives:**
+- **Multi-platform support**: Export to AppFlowy templates, Notion-compatible format, and Outline JSON
 - **Preserve content integrity**: Maintain all markdown text, formatting, and document structure
-- **Convert internal links**: Transform Obsidian's wikilink system (`[[Note]]`) to AppFlowy-compatible references
+- **Convert internal links**: Transform Obsidian's wikilink system (`[[Note]]`) to target-compatible references
 - **Migrate assets**: Copy and relink all images, PDFs, and other attachments
-- **Maintain organization**: Preserve folder structure and file relationships
-- **Handle metadata**: Convert YAML frontmatter and tags to AppFlowy properties
+- **Maintain organization**: Preserve folder structure and file relationships as collections/folders
+- **Handle metadata**: Convert YAML frontmatter and tags to target system properties
 - **Provide verification**: Generate reports showing what was converted and any limitations
 
-**Success definition:** A working CLI tool that can process a typical Obsidian vault (100-1000 notes) and generate an importable AppFlowy package with 90%+ content fidelity and functional internal linking.
+**Success definition:** A CLI tool that can process typical Obsidian vaults (100-1000 notes) and create importable packages for each target system with 90%+ content fidelity and functional internal linking.
 
-**Non-goals for MVP:** This tool focuses on one-time migration, not ongoing synchronization. Complex plugin-specific syntax, real-time collaboration features, and GUI interfaces are explicitly out of scope.
-
-This document outlines the technical requirements for building this minimal viable CLI tool, emphasizing sound architecture principles and practical implementation over feature completeness.
+**Non-goals:** This tool focuses on one-time migration, not ongoing synchronization. Complex plugin-specific syntax, real-time collaboration features, and bidirectional sync are explicitly out of scope.
 
 ## Understanding the source and target systems
 
@@ -40,264 +39,203 @@ Obsidian extends CommonMark with several proprietary features that require speci
 - Attachments stored in configurable locations
 - YAML frontmatter for metadata
 
-### AppFlowy's import capabilities
+### Target system formats
 
-AppFlowy uses a Flutter frontend with Rust backend, storing documents as JSON with node-based architecture. Current import infrastructure supports Notion workspace imports and template systems.
+**AppFlowy templates:**
+- JSON-based document structure with page hierarchy
+- Delta format for rich text content
+- Asset handling through base64 encoding or file references
+- Template-based import system
 
-**Key capabilities:**
-- Markdown import via `markdownToDocument()` function
-- JSON document structure with type, attributes, children, and Delta text content
-- ZIP-based template import for bundled content with assets
-- SQLite storage with offline capability
+**Notion format (for AppFlowy import):**
+- Markdown files with specific naming conventions
+- Folder structure preservation
+- Asset files in nested directories
+- Compatible with AppFlowy's Notion import feature
 
-**Limitations:**
-- No public REST API
-- Limited native wikilink support
-- No graph visualization equivalent
+**Outline JSON import:**
+- ZIP file containing JSON export format
+- Collection-based document organization
+- ProseMirror document structure for content
+- Separate attachment handling with upload directory
 
-## MVP architecture and implementation strategy
+## Architecture and implementation strategy
 
 ### Technology stack
 
 **Core dependencies:**
-- **Runtime**: Python 3.8+ for excellent text processing and file handling
-- **Markdown parsing**: `python-markdown` with custom WikiLink extension for AST-based parsing
-- **YAML processing**: `PyYAML` for frontmatter extraction
-- **File operations**: `pathlib` and `shutil` (built-in) for cross-platform compatibility
-- **CLI framework**: `click` for argument parsing and user interaction
+- **Runtime**: Python 3.11+ for cross-platform compatibility
+- **CLI Framework**: Click for command-line interface
+- **File handling**: Built-in `zipfile` and `pathlib` for cross-platform file operations
+- **Markdown parsing**: Custom AST-based parser for wikilinks and Obsidian syntax
+- **Content transformation**: Modular parser system for different syntax elements
 
-**Processing pipeline:**
-Python's excellent text processing capabilities combined with AST-based parsing make it ideal for reliable markdown transformation:
+**Architecture pattern:**
+Hexagonal architecture with dependency injection:
 
 ```python
-from pathlib import Path
-import markdown
-import yaml
-from src.infrastructure.parsers.wikilink_parser import WikiLinkParser
+# Domain layer - pure business logic
+class OutlineDocumentGenerator:
+    def generate_outline_package(contents, vault_name) -> OutlinePackage
 
-def process_obsidian_file(file_path: Path) -> dict:
-    content = file_path.read_text(encoding='utf-8')
-    
-    # Extract frontmatter
-    frontmatter, body = extract_yaml_frontmatter(content)
-    
-    # AST-based wikilink extraction (context-aware)
-    parser = WikiLinkParser()
-    wikilinks = parser.extract_wikilinks(body)
-    
-    # Transform content using markdown AST
-    md = markdown.Markdown(extensions=['wikilink_extension'])
-    transformed = transform_wikilinks(body, wikilinks)
-    transformed = transform_callouts(transformed)
-    transformed = extract_tags(transformed)
-    
-    return {
-        'metadata': frontmatter,
-        'content': transformed,
-        'wikilinks': wikilinks,
-        'assets': find_asset_references(body)
-    }
+# Application layer - orchestration
+class OutlineExportUseCase:
+    def export(config: OutlineExportConfig) -> OutlineExportResult
+
+# Infrastructure layer - external concerns
+class OutlinePackageGenerator:
+    def generate_package(package: OutlinePackage, output_path: Path) -> Path
 ```
 
-### Architectural Decision: AST-Based Wikilink Parsing
-
-**Problem:** Obsidian wikilinks (`[[Note]]`, `[[Note|Alias]]`, etc.) require reliable extraction from markdown content while respecting context (code blocks should be ignored).
-
-**Solution:** Custom Python-Markdown extension with AST-based inline processor instead of regex patterns.
-
-**Key Benefits:**
-- **Context Awareness**: Automatically ignores wikilinks in code blocks and inline code
-- **Reliability**: Handles complex nested structures and edge cases consistently  
-- **Maintainability**: Clean separation between parsing logic and business logic
-- **Extensibility**: Easy to add support for new wikilink variants
-
-**Implementation Approach:**
-```python
-class WikiLinkExtension(Extension):
-    """Python-Markdown extension for parsing Obsidian wikilinks."""
-    
-    def extendMarkdown(self, md):
-        # Register inline processor for wikilink patterns
-        wikilink_pattern = WikiLinkInlineProcessor(r'!?\\[\\[[^\\]]+\\]\\]', md)
-        md.inlinePatterns.register(wikilink_pattern, 'wikilink', 175)
-
-class WikiLinkInlineProcessor(InlineProcessor):
-    """AST-based processor handling all wikilink variants."""
-    
-    def handleMatch(self, m, data):
-        # Parse: [[target#header^block|alias]] or ![[embed]]
-        # Returns: WikiLink(target, alias, header, block_id, is_embed)
-        return self._parse_wikilink_content(m.group(0))
-```
-
-**Supported Variants:**
-- `[[Note]]` - Basic wikilink
-- `[[Note|Alias]]` - With display alias  
-- `[[Note#Header]]` - Section reference
-- `[[Note^block-id]]` - Block reference
-- `![[Note]]` - Embedded content
-- Complex combinations like `[[Note#Header|Alias]]`
-
-### Core conversion steps
+### Core conversion pipeline
 
 **Step 1: Vault Analysis**
-- Scan directory for `.obsidian/` to confirm vault
-- Build file inventory (`.md`, assets)
-- Extract vault configuration from `.obsidian/app.json`
-- Create link relationship map
+- Scan vault directory structure for `.obsidian/` to confirm validity
+- Build file inventory (`.md` files, assets)
+- Create wikilink relationship map
+- Generate folder structure analysis
 
 **Step 2: Content Transformation**
-- Parse each markdown file to AST
-- Extract frontmatter metadata
-- Convert wikilinks to standard markdown links
-- Transform callouts to closest AppFlowy equivalent
+- Parse each markdown file with frontmatter extraction
+- Convert wikilinks using 3-stage resolution (exact path → filename → fuzzy match)
+- Transform callouts to target system equivalents
 - Process block references and embeds
-- Generate intermediate JSON structure
+- Handle asset references and linking
 
-**Step 3: Asset Migration**
-- Copy all referenced images/attachments
-- Update asset paths for AppFlowy structure
-- Maintain relative path relationships
-- Generate asset manifest
+**Step 3: Format-Specific Generation**
+- **AppFlowy**: Generate JSON documents with Delta content format
+- **Notion**: Create markdown files with proper naming conventions
+- **Outline**: Convert to ProseMirror JSON structure with collection organization
 
-**Step 4: AppFlowy Package Generation**
-- Create AppFlowy-compatible JSON documents
-- Bundle documents and assets into ZIP
-- Generate `config.json` manifest
-- Output importable package
+**Step 4: Package Creation**
+- Create ZIP file with target-specific structure
+- Copy and organize assets in proper directories
+- Generate metadata files (when required)
+- Handle attachment referencing for each format
 
-**Step 5: Manual Import**
-- User imports generated ZIP via AppFlowy UI
-- Tool provides verification report
-- Lists any conversion limitations/losses
+**Step 5: Validation and Reporting**
+- Validate generated package structure
+- Report conversion statistics and warnings
+- Identify broken links and conversion limitations
 
 ## Technical implementation details
 
 ### Wikilink resolution algorithm
 
-Handle Obsidian's three-stage link resolution using Python's robust path handling:
+Handle Obsidian's three-stage link resolution:
 
 1. **Exact path match**: `[[folder/note]]` → check exact path
 2. **Filename match**: `[[note]]` → search vault for `note.md`
 3. **Fuzzy match**: Handle variations in casing/spacing
 
-```python
-import re
-from pathlib import Path
-from typing import Optional, List
-
-class VaultIndex:
-    def __init__(self, vault_path: Path):
-        self.vault_path = vault_path
-        self.files = {}  # filename -> full_path mapping
-        self.paths = set()  # all valid paths
-        self._build_index()
+```typescript
+class VaultIndex {
+  private files: Map<string, string> = new Map(); // filename -> full_path
+  private paths: Set<string> = new Set(); // all valid paths
+  
+  constructor(private vaultStructure: any) {
+    this.buildIndex();
+  }
+  
+  private buildIndex(): void {
+    // Build file mapping from extracted vault structure
+  }
+  
+  resolveWikilink(link: string, currentPath: string): string {
+    const cleanLink = link.replace(/[#^].*$/, '');
     
-    def _build_index(self):
-        for md_file in self.vault_path.rglob("*.md"):
-            rel_path = md_file.relative_to(self.vault_path)
-            self.paths.add(str(rel_path))
-            self.files[md_file.stem] = str(rel_path)
-
-def resolve_wikilink(link: str, current_path: Path, vault: VaultIndex) -> str:
-    """Resolve wikilink following Obsidian's precedence rules."""
-    # Remove any heading/block references
-    clean_link = re.sub(r'[#^].*$', '', link)
+    // Try exact path first
+    if (this.paths.has(cleanLink)) {
+      return cleanLink;
+    }
     
-    # Try exact path first
-    if clean_link in vault.paths:
-        return clean_link
+    // Try filename match
+    if (this.files.has(cleanLink)) {
+      return this.files.get(cleanLink)!;
+    }
     
-    # Try filename match
-    if clean_link in vault.files:
-        return vault.files[clean_link]
+    // Try with .md extension
+    const mdLink = `${cleanLink}.md`;
+    if (this.paths.has(mdLink)) {
+      return mdLink;
+    }
     
-    # Try with .md extension
-    md_link = f"{clean_link}.md"
-    if md_link in vault.paths:
-        return md_link
-    
-    # No match found
-    print(f"Warning: Broken link '{link}' in {current_path}")
-    return f"#broken-link-{clean_link}"
+    // No match found - return broken link placeholder
+    console.warn(`Broken link '${link}' in ${currentPath}`);
+    return `#broken-link-${cleanLink}`;
+  }
+}
 ```
 
 ### Content transformation mappings
 
-**Wikilinks to markdown links:**
-- `[[Note]]` → `[Note](Note.md)`
-- `[[Note|Alias]]` → `[Alias](Note.md)`
-- `[[Note#Header]]` → `[Note#Header](Note.md#header)`
+**Wikilinks transformation by format:**
+- **AppFlowy**: `[[Note]]` → Internal page references
+- **Notion**: `[[Note]]` → `[Note](./Note.md)`
+- **Outline**: `[[Note]]` → ProseMirror link nodes
 
-**Callouts to AppFlowy blocks:**
-- `> [!info]` → `> **Info:** ` (quoted block with emphasis)
-- `> [!warning]` → `> ⚠️ **Warning:** `
-- `> [!note]` → `> 📝 **Note:** `
+**Callouts by format:**
+- **AppFlowy**: `> [!info]` → Callout blocks with styling
+- **Notion**: `> [!info]` → `> **Info:**` (quoted blocks)
+- **Outline**: `> [!info]` → Blockquote nodes with emphasis
 
 **Block references:**
-- `^block-id` → Convert to HTML comment `<!-- block: block-id -->`
-- `[[Note^block-id]]` → `[Note (see block-id)](Note.md)`
+- **AppFlowy**: `^block-id` → Block reference system
+- **Notion**: `^block-id` → HTML comments `<!-- block: block-id -->`
+- **Outline**: `^block-id` → HTML comments in content
 
 **Metadata handling:**
-- YAML frontmatter → AppFlowy properties
-- `tags: [tag1, tag2]` → AppFlowy tag system
-- `aliases: [alias1]` → Note title variations
+- **AppFlowy**: YAML frontmatter → Page properties
+- **Notion**: YAML frontmatter → File-level metadata
+- **Outline**: YAML frontmatter → Document properties and fields
 
-### File structure and data flow
+### CLI tool architecture
 
+**Project structure:**
 ```
-obsidian-to-appflowy/
-├── src/
-│   ├── parser/           # Obsidian vault parsing
-│   │   ├── __init__.py
-│   │   ├── vault.py      # VaultIndex and file discovery
-│   │   └── markdown.py   # Markdown parsing utilities
-│   ├── transformer/      # Content conversion logic
-│   │   ├── __init__.py
-│   │   ├── wikilinks.py  # Wikilink resolution and conversion
-│   │   ├── callouts.py   # Callout transformation
-│   │   └── metadata.py   # YAML frontmatter handling
-│   ├── generator/        # AppFlowy package creation
-│   │   ├── __init__.py
-│   │   ├── appflowy.py   # AppFlowy JSON document generation
-│   │   └── package.py    # ZIP package assembly
-│   ├── cli.py           # Command-line interface
-│   └── main.py          # Entry point
-├── requirements.txt      # Python dependencies
-├── setup.py             # Package configuration
-└── output/              # Generated AppFlowy packages
+src/
+├── domain/                         # Business logic
+│   ├── models.py                   # Immutable data classes
+│   ├── vault_analyzer.py           # Vault structure analysis
+│   ├── content_transformer.py      # Content conversion
+│   ├── outline_document_generator.py # Outline format generation
+│   └── prosemirror_document_generator.py # ProseMirror conversion
+├── application/                    # Use cases
+│   ├── export_use_case.py          # AppFlowy export
+│   ├── notion_export_use_case.py   # Notion export
+│   └── outline_export_use_case.py  # Outline export
+├── infrastructure/                 # External interfaces
+│   ├── file_system.py              # File operations
+│   ├── parsers/                    # Syntax parsers
+│   └── generators/                 # Package generators
+└── cli.py                          # Command-line interface
 ```
 
-**Data flow using Python dataclasses:**
+**Data flow:**
 ```python
-from dataclasses import dataclass
-from typing import List, Dict, Any
-from pathlib import Path
-
-@dataclass
+@dataclass(frozen=True)
 class VaultStructure:
-    files: List[Path]
+    path: Path
+    markdown_files: List[Path]
+    asset_files: List[Path]
     links: Dict[str, List[str]]
     metadata: Dict[str, Dict[str, Any]]
-    assets: List[Path]
 
-@dataclass 
-class TransformedContent:
-    markdown: str
-    metadata: Dict[str, Any]
-    assets: List[Path]
+@dataclass(frozen=True)
+class OutlinePackage:
+    metadata: Dict[str, Any]           # Export metadata
+    collections: List[Dict[str, Any]]  # Collection structures
+    documents: Dict[str, Dict[str, Any]] # Document data
+    attachments: Dict[str, Dict[str, Any]] # Attachment data
     warnings: List[str]
-
-@dataclass
-class AppFlowyPackage:
-    documents: List[Dict[str, Any]]
-    assets: List[Path] 
-    config: Dict[str, Any]
 ```
 
-1. **VaultParser** → `VaultStructure` (files, links, metadata)
-2. **ContentTransformer** → `TransformedContent` (converted markdown, assets)
-3. **PackageGenerator** → `appflowy-import.zip` (importable package)
+**Export process:**
+1. **CLI invocation** → User specifies format and options
+2. **Vault analysis** → Scan files, build index, analyze links
+3. **Content transformation** → Convert syntax per target format
+4. **Package generation** → Create ZIP with proper structure
+5. **Validation** → Verify package integrity and report results
 
 ### Error handling and validation
 
@@ -305,176 +243,120 @@ class AppFlowyPackage:
 - Unknown callout types → generic quoted blocks
 - Complex transclusions → simplified links with notes
 - Plugin-specific syntax → HTML comments preserving original
+- Broken wikilinks → placeholder links with warnings
 
 **Validation checks:**
-- Verify all internal links resolve
-- Confirm asset files exist
-- Check for circular references
-- Validate generated JSON structure
+- Verify ZIP contains valid Obsidian vault
+- Confirm all internal links can be resolved
+- Check asset files exist and are accessible
+- Validate markdown parsing results
+- Ensure collection/document creation succeeds
 
 **Reporting:**
-- Summary of files processed
-- List of broken/ambiguous links
+- Summary of files processed successfully
+- List of broken/ambiguous links with locations
 - Conversion warnings and limitations
-- Asset migration status
+- Asset migration status and any failures
+- Performance metrics (processing time, queue status)
 
-## MVP scope and limitations
+## Integration with Outline's import system
 
-### Included features
-- Basic markdown conversion (headers, lists, tables, code blocks)
-- Wikilink resolution and conversion
-- Simple callout transformation
-- Asset copying and path rewriting
-- YAML frontmatter to properties mapping
-- ZIP package generation for manual import
+### Required components
 
-### Excluded from MVP
-- Complex plugin syntax (Dataview, Templater)
-- Canvas file conversion
-- Graph view recreation
-- Real-time sync capabilities
-- GUI interface
-- Advanced template processing
+**Client-side integration:**
+- Add Obsidian import option to `app/scenes/Settings/Import.tsx`
+- File upload component with ZIP validation
+- Progress tracking and status display
+- Import history and management
 
-### Known limitations
-- No graph visualization in AppFlowy
-- Limited callout type mapping
-- Block references lose interactive functionality
-- Some formatting may require manual adjustment
-- Large vaults may need chunked processing
+**Server-side integration:**
+- Register ObsidianImportsProcessor with queue system
+- Add route handlers to `server/routes/api/imports/imports.ts`
+- Database migrations for any additional import metadata
+- Plugin registration in main application
 
-## Development phases
+**API endpoints:**
+- `POST /api/imports` - Initiate Obsidian vault import
+- `GET /api/imports/:id` - Check import status
+- `DELETE /api/imports/:id` - Cancel/cleanup import
 
-**Phase 1: Core Parser** (Week 1-2)
-- Vault detection and file scanning using `pathlib`
-- AST-based wikilink parsing with Python-Markdown custom extension
-- Wikilink extraction with context awareness (ignores code blocks)
-- Asset inventory generation
+### Queue task architecture
 
-**Phase 2: Content Transformation** (Week 3-4)
-- Wikilink to markdown link conversion
-- Callout transformation using string replacement
-- YAML frontmatter extraction with `PyYAML`
-- Basic error handling and logging
+```typescript
+class ObsidianImportsProcessor extends ImportsProcessor {
+  async canProcess(type: string): Promise<boolean> {
+    return type === 'obsidian';
+  }
+  
+  async buildTasksInput(input: { file: File }): Promise<any[]> {
+    const vault = await this.parseVault(input.file);
+    return vault.files.map(file => ({
+      type: 'document',
+      path: file.path,
+      content: file.content,
+      metadata: file.metadata
+    }));
+  }
+  
+  async scheduleTask(input: any): Promise<void> {
+    await this.addJob('obsidian-import-task', input);
+  }
+}
 
-**Phase 3: Package Generation** (Week 5-6)
-- AppFlowy JSON document creation
-- ZIP package assembly using `zipfile` (built-in)
-- Asset bundling and path rewriting
-- CLI interface with `click` and reporting
-
-**Phase 4: Testing and Refinement** (Week 7-8)
-- Test with various vault structures
-- Edge case handling with Python's robust exception system
-- Performance optimization using generators for large vaults
-- Documentation and usage examples
-
-## Phase 3 Implementation: AppFlowy Package Generation (COMPLETED)
-
-Phase 3 has been successfully implemented with comprehensive AppFlowy package generation capabilities:
-
-### AppFlowy JSON Document Structure
-
-The implemented `AppFlowyDocumentGenerator` creates documents following AppFlowy's JSON format:
-
-```json
-{
-  "document": {
-    "type": "page",
-    "children": [
-      {
-        "type": "heading",
-        "data": {
-          "level": 1,
-          "delta": [{"insert": "Document Title"}]
-        }
-      },
-      {
-        "type": "paragraph", 
-        "data": {
-          "delta": [
-            {"insert": "Text with "},
-            {"insert": "bold", "attributes": {"bold": true}},
-            {"insert": " and "},
-            {"insert": "italic", "attributes": {"italic": true}},
-            {"insert": " formatting."}
-          ]
-        }
-      }
-    ]
-  },
-  "properties": {
-    "title": "Document Title",
-    "tags": ["tag1", "tag2"],
-    "created": "2024-01-01"
+class ObsidianImportTask extends APIImportTask {
+  async process(): Promise<void> {
+    const { path, content, metadata } = this.input;
+    
+    // Process wikilinks and content
+    const processedContent = await this.transformContent(content);
+    
+    // Create document in Outline
+    const document = await this.createDocument({
+      title: this.extractTitle(path, metadata),
+      text: processedContent,
+      ...metadata
+    });
+    
+    this.output = { documentId: document.id };
   }
 }
 ```
 
-### Generated ZIP Package Structure
+## Scope and limitations
 
-The `AppFlowyPackageGenerator` creates ZIP packages with this structure:
+### Included features
+- Basic markdown conversion (headers, lists, tables, code blocks)
+- Wikilink resolution and conversion to standard markdown links
+- Simple callout transformation to standard markdown
+- Asset upload and URL rewriting
+- YAML frontmatter to Outline properties mapping
+- Folder structure preservation as collection hierarchy
+- Queue-based processing for large vaults
 
-```
-appflowy-export.zip
-├── config.json          # AppFlowy template manifest
-├── documents/
-│   ├── note1.json       # AppFlowy JSON documents
-│   └── note2.json
-├── assets/              # Referenced files (images, PDFs, etc.)
-│   ├── image1.png
-│   └── document.pdf
-└── warnings.txt         # Conversion warnings (if any)
-```
+### Excluded features
+- Complex plugin syntax (Dataview, Templater)
+- Canvas file conversion
+- Graph view recreation
+- Real-time sync capabilities
+- Bidirectional synchronization
+- Advanced template processing
+- Obsidian-specific formatting preservation
 
-### Key Features Implemented
-
-1. **Comprehensive Markdown Support**: 
-   - Headings (H1-H6) with proper level mapping
-   - Paragraphs with rich text formatting (bold, italic)
-   - Code blocks with language detection
-   - Bulleted and numbered lists
-   - Images with alt text and URL references
-   - Tables with row/column structure
-   - Empty file preservation (generates empty paragraphs to prevent data loss)
-
-2. **AppFlowy Template Compatibility**:
-   - Valid `config.json` manifest with metadata
-   - Document type declarations and counts
-   - Asset inventory and path management
-   - Warning preservation and reporting
-
-3. **Asset Management**:
-   - Asset copying with relative path correction
-   - Filename conflict resolution
-   - Nested directory structure preservation
-   - Binary file handling (images, PDFs, etc.)
-
-4. **Quality Assurance**:
-   - 28 comprehensive tests covering all functionality
-   - Package structure validation
-   - Real vault data testing with `/data/_obsidian/`
-   - Error handling for malformed input
-   - ZIP compression optimization
-
-### Integration Pipeline
-
-The complete pipeline flow:
-1. **Content Transformation** → `TransformedContent` (Phase 2 output)
-2. **Document Generation** → AppFlowy JSON format via `AppFlowyDocumentGenerator`
-3. **Package Assembly** → ZIP creation via `AppFlowyPackageGenerator`
-4. **Validation** → Package structure verification
-5. **Output** → Importable `.zip` file for AppFlowy
-
-This implementation enables direct import of converted Obsidian vaults into AppFlowy through the template import feature.
+### Known limitations
+- No graph visualization equivalent in Outline
+- Limited callout type mapping to standard markdown
+- Block references lose interactive functionality
+- Some complex formatting may require manual adjustment
+- Large vaults may take considerable processing time
+- Wikilink resolution depends on file naming consistency
 
 ## Success criteria
 
 - Successfully convert 90%+ of standard markdown content
 - Resolve 95%+ of internal wikilinks correctly
-- Preserve all assets with updated references
-- Generate importable AppFlowy packages
-- Process typical vault (100-500 notes) in under 2 minutes
-- Provide clear conversion reports
-
-This MVP focuses on the essential conversion pipeline while maintaining architectural soundness for future enhancements. The CLI-first approach prioritizes functionality over user experience, enabling rapid development and testing.
+- Preserve all assets with updated Outline URLs
+- Maintain folder structure as collection/document hierarchy
+- Process typical vault (100-500 notes) reliably through queue system
+- Provide comprehensive conversion reports
+- Handle ZIP files up to reasonable size limits (100MB+)
+- Integrate seamlessly with existing Outline import UI

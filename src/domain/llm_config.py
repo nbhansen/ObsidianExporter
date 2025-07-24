@@ -29,8 +29,6 @@ class LLMConfig:
             enabled=enabled,
             gemini_api_key=api_key,
             model_name=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
-            min_confidence_threshold=float(
-                os.getenv("LLM_MIN_CONFIDENCE", "0.7")
-            ),
+            min_confidence_threshold=float(os.getenv("LLM_MIN_CONFIDENCE", "0.7")),
             rate_limit_per_minute=int(os.getenv("LLM_RATE_LIMIT", "60")),
         )

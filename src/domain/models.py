@@ -63,3 +63,32 @@ class AppFlowyPackage:
     assets: List[Path]
     config: Dict[str, Any]
     warnings: List[str]
+
+
+@dataclass(frozen=True)
+class NotionPackage:
+    """Immutable representation of Notion-compatible package ready for export."""
+
+    documents: List[Dict[str, Any]]  # Markdown documents with metadata
+    assets: List[Path]
+    warnings: List[str]
+
+
+@dataclass(frozen=True)
+class OutlinePackage:
+    """Immutable representation of Outline-compatible package ready for export."""
+
+    metadata: Dict[str, Any]  # Export metadata for metadata.json
+    collections: List[Dict[str, Any]]  # Collection structures with document hierarchy
+    documents: Dict[str, Dict[str, Any]]  # Document data by ID
+    attachments: Dict[str, Dict[str, Any]]  # Attachment data by ID
+    warnings: List[str]
+
+
+@dataclass(frozen=True)
+class ProseMirrorDocument:
+    """Immutable representation of ProseMirror document structure."""
+
+    type: str  # Node type (e.g., "doc", "paragraph", "text")
+    content: List[Dict[str, Any]]  # Child nodes
+    attrs: Optional[Dict[str, Any]] = None  # Node attributes
