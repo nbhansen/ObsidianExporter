@@ -293,6 +293,29 @@ print("hello world")
             assert len(doc_id) == 36, f"Document ID should be UUID format (36 chars), got {len(doc_id)}"
             assert doc_id.count("-") == 4, f"Document ID should be UUID format with 4 hyphens"
 
+    def test_prosemirror_documents_have_content(self):
+        """Test that all ProseMirror documents have at least one content node."""
+        test_cases = [
+            "",  # Empty markdown
+            "   \n\n   ",  # Whitespace only
+            "# Title",  # Normal content
+            "Paragraph text",  # Simple paragraph
+        ]
+        
+        for markdown in test_cases:
+            result = self.generator.convert_markdown(markdown)
+            
+            # Every document must have at least one content node
+            assert len(result.content) >= 1, \
+                f"Document must have at least one content node, got empty content for markdown: '{markdown}'"
+            
+            # Check that content nodes are valid
+            for node in result.content:
+                assert isinstance(node, dict), "Content nodes must be dictionaries"
+                assert "type" in node, "Content nodes must have a type"
+                assert node["type"] in self.SUPPORTED_NODE_TYPES, \
+                    f"Node type '{node['type']}' is not supported"
+
     def _validate_node_types(self, content, context=""):
         """Recursively validate all node types in content."""
         for node in content:

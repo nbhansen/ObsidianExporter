@@ -46,15 +46,48 @@ class OutlineDocumentGenerator:
         # Create metadata
         metadata = self._create_metadata(current_time)
 
-        # Process documents and collect data
+        # First pass: Build document title to urlId mapping for wikilink resolution
+        document_mapping = {}
+        doc_ids = {}
+        
+        for content in contents:
+            # Extract title from metadata or file path (same logic as _create_document)
+            title = content.metadata.get("title")
+            if not title:
+                title = content.original_path.stem.replace("_", " ").replace("-", " ")
+                title = " ".join(word.capitalize() for word in title.split())
+            
+            # Generate consistent doc_id and urlId
+            doc_id = str(uuid.uuid4())
+            url_id = self._generate_url_id(title)
+            
+            # Build mappings - include both the formatted title and the raw filename stem
+            document_mapping[title] = url_id
+            
+            # Also map the raw filename stem (without .md) for direct filename matches
+            filename_stem = content.original_path.stem
+            if filename_stem != title:
+                document_mapping[filename_stem] = url_id
+            
+            # Also map filename with spaces for common wikilink patterns like "document 1" -> "document1.md"
+            filename_with_spaces = filename_stem.replace("-", " ").replace("_", " ")
+            if filename_with_spaces != title and filename_with_spaces != filename_stem:
+                document_mapping[filename_with_spaces] = url_id
+            
+            doc_ids[content.original_path] = doc_id
+
+        # Initialize ProseMirror generator with document mapping for wikilink resolution
+        self._prosemirror_generator = ProseMirrorDocumentGenerator(document_mapping)
+
+        # Second pass: Process documents with wikilink resolution
         documents = {}
         attachments = {}
         document_structure = []
         all_warnings = []
 
         for content in contents:
-            # Generate document
-            doc_id = str(uuid.uuid4())
+            # Use pre-generated doc_id
+            doc_id = doc_ids[content.original_path]
             document = self._create_document(content, doc_id, current_time)
             documents[doc_id] = document
 

@@ -189,10 +189,12 @@ console.log('code');
         # When: We convert to ProseMirror
         result = self.generator.convert_markdown(markdown)
 
-        # Then: Result should be empty document
+        # Then: Result should contain one empty paragraph (Outline requirement)
         assert isinstance(result, ProseMirrorDocument)
         assert result.type == "doc"
-        assert result.content == []
+        assert len(result.content) == 1
+        assert result.content[0]["type"] == "paragraph"
+        assert result.content[0]["content"] == []
 
     def test_whitespace_only_content(self):
         """Test conversion of whitespace-only content."""
@@ -202,7 +204,119 @@ console.log('code');
         # When: We convert to ProseMirror
         result = self.generator.convert_markdown(markdown)
 
-        # Then: Result should be empty or contain empty paragraph
+        # Then: Result should contain one empty paragraph (Outline requirement)
         assert isinstance(result, ProseMirrorDocument)
         assert result.type == "doc"
-        assert len(result.content) <= 1  # May contain one empty paragraph or be empty
+        assert len(result.content) == 1
+        assert result.content[0]["type"] == "paragraph"
+        assert result.content[0]["content"] == []
+
+    def test_wikilink_conversion_without_mapping(self):
+        """Test wikilink conversion without document mapping creates broken links."""
+        # Given: Markdown with wikilink and no document mapping
+        markdown = "Check out [[Document Name]] for more info."
+
+        # When: We convert to ProseMirror
+        result = self.generator.convert_markdown(markdown)
+
+        # Then: Result should contain link with broken link URL
+        assert len(result.content) == 1
+        paragraph = result.content[0]
+        assert paragraph["type"] == "paragraph"
+        assert len(paragraph["content"]) == 3  # text + link + text
+
+        # Check link node
+        link_node = paragraph["content"][1]
+        assert link_node["type"] == "text"
+        assert link_node["text"] == "Document Name"
+        assert "marks" in link_node
+        assert len(link_node["marks"]) == 1
+
+        link_mark = link_node["marks"][0]
+        assert link_mark["type"] == "link"
+        assert link_mark["attrs"]["href"] == "#broken-link-document-name"
+        assert link_mark["attrs"]["title"] is None
+
+    def test_wikilink_conversion_with_mapping(self):
+        """Test wikilink conversion with document mapping creates proper links."""
+        # Given: Document mapping and markdown with wikilink
+        document_mapping = {"Document Name": "abc123def4"}
+        generator = ProseMirrorDocumentGenerator(document_mapping)
+        markdown = "Check out [[Document Name]] for more info."
+
+        # When: We convert to ProseMirror
+        result = generator.convert_markdown(markdown)
+
+        # Then: Result should contain proper Outline document link
+        paragraph = result.content[0]
+        link_node = paragraph["content"][1]
+        link_mark = link_node["marks"][0]
+        assert link_mark["attrs"]["href"] == "/doc/abc123def4"
+
+    def test_wikilink_with_alias_conversion(self):
+        """Test wikilink with alias conversion."""
+        # Given: Document mapping and markdown with aliased wikilink
+        document_mapping = {"Document Name": "abc123def4"}
+        generator = ProseMirrorDocumentGenerator(document_mapping)
+        markdown = "Check out [[Document Name|Display Text]] for more info."
+
+        # When: We convert to ProseMirror
+        result = generator.convert_markdown(markdown)
+
+        # Then: Result should use alias as display text
+        paragraph = result.content[0]
+        link_node = paragraph["content"][1]
+        assert link_node["text"] == "Display Text"
+        link_mark = link_node["marks"][0]
+        assert link_mark["attrs"]["href"] == "/doc/abc123def4"
+
+    def test_wikilink_case_insensitive_matching(self):
+        """Test wikilink resolution with case-insensitive matching."""
+        # Given: Document mapping with different case
+        document_mapping = {"Document Name": "abc123def4"}
+        generator = ProseMirrorDocumentGenerator(document_mapping)
+        markdown = "Check out [[document name]] for more info."
+
+        # When: We convert to ProseMirror
+        result = generator.convert_markdown(markdown)
+
+        # Then: Should resolve despite case difference
+        paragraph = result.content[0]
+        link_node = paragraph["content"][1]
+        link_mark = link_node["marks"][0]
+        assert link_mark["attrs"]["href"] == "/doc/abc123def4"
+
+    def test_wikilink_with_headers_and_blocks(self):
+        """Test wikilink with headers and block references."""
+        # Given: Document mapping and markdown with complex wikilinks
+        document_mapping = {"Document Name": "abc123def4"}
+        generator = ProseMirrorDocumentGenerator(document_mapping)
+        markdown = "See [[Document Name#Section]] and [[Document Name^block-id]]."
+
+        # When: We convert to ProseMirror
+        result = generator.convert_markdown(markdown)
+
+        # Then: Both should resolve to same document (header/block info ignored for now)
+        paragraph = result.content[0]
+        link1 = paragraph["content"][1]["marks"][0]
+        link2 = paragraph["content"][3]["marks"][0]
+        assert link1["attrs"]["href"] == "/doc/abc123def4"
+        assert link2["attrs"]["href"] == "/doc/abc123def4"
+
+    def test_mixed_wikilinks_and_regular_links(self):
+        """Test mixing wikilinks and regular markdown links."""
+        # Given: Document mapping and mixed link types
+        document_mapping = {"Internal Doc": "abc123def4"}
+        generator = ProseMirrorDocumentGenerator(document_mapping)
+        markdown = "See [[Internal Doc]] and [External](https://example.com)."
+
+        # When: We convert to ProseMirror
+        result = generator.convert_markdown(markdown)
+
+        # Then: Both links should be properly converted
+        paragraph = result.content[0]
+        internal_link = paragraph["content"][1]["marks"][0]
+        external_link = paragraph["content"][3]["marks"][0]
+        
+        assert internal_link["attrs"]["href"] == "/doc/abc123def4"
+        assert external_link["attrs"]["href"] == "https://example.com"

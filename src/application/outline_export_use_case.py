@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from ..domain.content_transformer import ContentTransformer
-from ..domain.models import OutlinePackage, VaultStructure
+from ..domain.models import OutlinePackage, TransformedContent, VaultStructure
 from ..domain.outline_document_generator import OutlineDocumentGenerator
 from ..domain.vault_analyzer import VaultAnalyzer
 from ..domain.vault_index_builder import VaultIndexBuilder
@@ -107,24 +107,29 @@ class OutlineExportUseCase:
             self._report_progress(config, "Building vault index...")
             vault_index = self._vault_index_builder.build_index(config.vault_path)
 
-            # Stage 3: Transform content for each file
-            self._report_progress(config, "Transforming content...")
+            # Stage 3: Prepare raw content for Outline export (skip content transformation)
+            # The OutlineDocumentGenerator handles wikilink resolution directly
+            self._report_progress(config, "Preparing content...")
             transformed_contents = []
 
             for md_file in vault_structure.markdown_files:
                 try:
-                    # Read file content
+                    # Read raw file content without transformation
                     markdown_content = self._file_system.read_file_content(md_file)
 
-                    # Transform content
-                    transformed = self._content_transformer.transform_content(
-                        md_file, markdown_content, vault_index
+                    # Create minimal TransformedContent with raw markdown
+                    # Wikilink resolution will be handled by OutlineDocumentGenerator
+                    transformed = TransformedContent(
+                        original_path=md_file,
+                        markdown=markdown_content,
+                        metadata={},  # Basic metadata - could extract frontmatter if needed
+                        assets=[],    # Assets - could be collected if needed  
+                        warnings=[]   # No warnings from transformation since we skip it
                     )
                     transformed_contents.append(transformed)
-                    result.warnings.extend(transformed.warnings)
 
                 except Exception as e:
-                    error_msg = f"Failed to transform {md_file.name}: {str(e)}"
+                    error_msg = f"Failed to read {md_file.name}: {str(e)}"
                     result.errors.append(error_msg)
                     continue
 
