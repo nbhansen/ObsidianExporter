@@ -82,7 +82,7 @@ class CalloutParser:
             Content with callouts transformed to AppFlowy format
         """
 
-        def replace_callout_header(match) -> str:
+        def replace_callout_header(match: re.Match[str]) -> str:
             """Replace a single callout header with AppFlowy format."""
             blockquote_prefix = match.group(1)  # "> "
             callout_type = match.group(2).lower()  # type (case-insensitive)

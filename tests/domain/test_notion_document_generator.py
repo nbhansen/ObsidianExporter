@@ -49,12 +49,18 @@ class TestNotionDocumentGenerator:
         }
 
         # When: Converting to notion format
-        result = generator.convert_to_markdown(appflowy_doc, "test-page.md")
+        result = generator.convert_to_notion_format(appflowy_doc, "test-page")
 
-        # Then: Should return markdown document
-        assert result["name"] == "test-page.md"
+        # Then: Should return notion format document
+        assert isinstance(result, dict)
+        assert "name" in result
+        assert "content" in result
+        assert "path" in result
+        # Name should follow Notion format: "Page Name [32-hex-id].md"
+        assert result["name"].startswith("test-page ")
+        assert result["name"].endswith(".md")
         assert result["content"] == "# Test Page\n\nThis is a test paragraph.\n"
-        assert result["path"] == "test-page.md"
+        assert result["path"] == result["name"]  # Simple pages use filename as path
 
     def test_convert_empty_appflowy_document(self):
         """
@@ -68,12 +74,13 @@ class TestNotionDocumentGenerator:
         appflowy_doc = {"document": {"type": "page", "children": []}}
 
         # When: Converting to notion format
-        result = generator.convert_to_markdown(appflowy_doc, "empty.md")
+        result = generator.convert_to_notion_format(appflowy_doc, "empty")
 
-        # Then: Should return empty markdown
-        assert result["name"] == "empty.md"
+        # Then: Should return empty notion format
+        assert result["name"].startswith("empty ")
+        assert result["name"].endswith(".md")
         assert result["content"] == ""
-        assert result["path"] == "empty.md"
+        assert result["path"] == result["name"]
 
     def test_convert_document_with_lists(self):
         """
@@ -105,7 +112,7 @@ class TestNotionDocumentGenerator:
         }
 
         # When: Converting to notion format
-        result = generator.convert_to_markdown(appflowy_doc, "lists.md")
+        result = generator.convert_to_notion_format(appflowy_doc, "lists")
 
         # Then: Should preserve list formatting
         expected_content = (
@@ -138,7 +145,7 @@ class TestNotionDocumentGenerator:
         }
 
         # When: Converting to notion format
-        result = generator.convert_to_markdown(appflowy_doc, "code.md")
+        result = generator.convert_to_notion_format(appflowy_doc, "code")
 
         # Then: Should preserve code block with language
         expected_content = "```python\nprint('Hello, World!')\n```\n"
@@ -166,11 +173,15 @@ class TestNotionDocumentGenerator:
         }
 
         # When: Converting to notion format
-        result = generator.convert_to_markdown(appflowy_doc, "images.md")
+        result = generator.convert_to_notion_format(appflowy_doc, "images")
 
-        # Then: Should create markdown image link
-        expected_content = "![Test image](assets/image.png)\n"
-        assert result["content"] == expected_content
+        # Then: Should create markdown image link with Notion-style URL-encoded path
+        # The content should contain the image with URL-encoded directory
+        content = result["content"]
+        assert content.startswith("![Test image](")
+        assert content.endswith("/image.png)\n")
+        # Path should be URL-encoded and contain the page name and ID
+        assert "images" in content  # Should contain part of the page name
 
     def test_convert_document_with_tables(self):
         """
@@ -209,7 +220,7 @@ class TestNotionDocumentGenerator:
         }
 
         # When: Converting to notion format
-        result = generator.convert_to_markdown(appflowy_doc, "table.md")
+        result = generator.convert_to_notion_format(appflowy_doc, "table")
 
         # Then: Should create markdown table
         expected_content = (
@@ -230,7 +241,7 @@ class TestNotionDocumentGenerator:
 
         # When/Then: Should raise ValueError
         with pytest.raises(ValueError, match="Invalid AppFlowy document structure"):
-            generator.convert_to_markdown(invalid_doc, "invalid.md")
+            generator.convert_to_notion_format(invalid_doc, "invalid")
 
     def test_preserve_rich_formatting_in_delta(self):
         """
@@ -262,7 +273,7 @@ class TestNotionDocumentGenerator:
         }
 
         # When: Converting to notion format
-        result = generator.convert_to_markdown(appflowy_doc, "formatting.md")
+        result = generator.convert_to_notion_format(appflowy_doc, "formatting")
 
         # Then: Should preserve markdown formatting
         expected_content = "This is **bold** and *italic* text.\n"

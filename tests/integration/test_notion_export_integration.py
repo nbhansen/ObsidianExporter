@@ -47,7 +47,7 @@ class TestNotionExportIntegration:
         file_system = FileSystemAdapter()
         wikilink_parser = WikiLinkParser()
         vault_analyzer = VaultAnalyzer(file_system, wikilink_parser)
-        vault_index_builder = VaultIndexBuilder()
+        vault_index_builder = VaultIndexBuilder(file_system)
         wikilink_resolver = WikiLinkResolver()
         callout_parser = CalloutParser()
         block_reference_parser = BlockReferenceParser()
@@ -90,8 +90,11 @@ class TestNotionExportIntegration:
         notion_document_generator = NotionDocumentGenerator()
         notion_package_generator = NotionPackageGenerator()
 
+        vault_index_builder = VaultIndexBuilder(file_system)
+
         use_case = NotionExportUseCase(
             vault_analyzer=vault_analyzer,
+            vault_index_builder=vault_index_builder,
             content_transformer=content_transformer,
             notion_document_generator=notion_document_generator,
             notion_package_generator=notion_package_generator,
@@ -149,8 +152,11 @@ class TestNotionExportIntegration:
         notion_document_generator = NotionDocumentGenerator()
         notion_package_generator = NotionPackageGenerator()
 
+        vault_index_builder = VaultIndexBuilder(file_system)
+
         use_case = NotionExportUseCase(
             vault_analyzer=vault_analyzer,
+            vault_index_builder=vault_index_builder,
             content_transformer=content_transformer,
             notion_document_generator=notion_document_generator,
             notion_package_generator=notion_package_generator,
@@ -259,8 +265,11 @@ class TestNotionExportIntegration:
         notion_package_generator = NotionPackageGenerator()
 
         # Step 4: Create application service that orchestrates everything
+        vault_index_builder = VaultIndexBuilder(file_system)
+
         use_case = NotionExportUseCase(
             vault_analyzer=vault_analyzer,
+            vault_index_builder=vault_index_builder,
             content_transformer=content_transformer,
             notion_document_generator=notion_document_generator,
             notion_package_generator=notion_package_generator,

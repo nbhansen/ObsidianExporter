@@ -6,7 +6,7 @@ to AppFlowy-importable ZIP packages with progress reporting and validation.
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional, Union, cast
 
 import click
 
@@ -152,7 +152,7 @@ def create_outline_export_use_case() -> OutlineExportUseCase:
 
 @click.group()
 @click.version_option(version="1.0.0", prog_name="obsidian-to-appflowy")
-def cli():
+def cli() -> None:
     """
     Convert Obsidian vaults to AppFlowy, Notion, or Outline-importable packages.
 
@@ -193,7 +193,7 @@ def cli():
     "-f",
     type=click.Choice(["appflowy", "notion", "outline"], case_sensitive=False),
     default="appflowy",
-    help="Export format: 'appflowy' for templates, 'notion' for Notion ZIP, or 'outline' for Outline JSON",
+    help="Export format: 'appflowy', 'notion', or 'outline'",
 )
 def convert_command(
     vault_path: Path,
@@ -202,7 +202,7 @@ def convert_command(
     verbose: bool,
     validate_only: bool,
     format: str,
-):
+) -> None:
     """
     Convert an Obsidian vault to AppFlowy, Notion, or Outline package.
 
@@ -228,14 +228,18 @@ def convert_command(
     if not name:
         name = vault_path.name
 
-    if not output and not validate_only:
-        if format.lower() == "notion":
-            format_suffix = "notion"
-        elif format.lower() == "outline":
-            format_suffix = "outline"
+    if not output:
+        if validate_only:
+            # For validation, we don't need an actual output path
+            output = Path("/tmp/validation-only")
         else:
-            format_suffix = "appflowy"
-        output = Path.cwd() / f"{vault_path.name}-{format_suffix}-export.zip"
+            if format.lower() == "notion":
+                format_suffix = "notion"
+            elif format.lower() == "outline":
+                format_suffix = "outline"
+            else:
+                format_suffix = "appflowy"
+            output = Path.cwd() / f"{vault_path.name}-{format_suffix}-export.zip"
 
     if output and not validate_only:
         # Ensure output directory exists
@@ -250,6 +254,9 @@ def convert_command(
 
     try:
         # Create use case based on format choice
+        use_case: Union[ExportUseCase, NotionExportUseCase, OutlineExportUseCase]
+        config: Union[ExportConfig, NotionExportConfig, OutlineExportConfig]
+
         if format.lower() == "notion":
             use_case = create_notion_export_use_case()
             config = NotionExportConfig(
@@ -284,12 +291,19 @@ def convert_command(
             click.echo(f"Starting {format_name} {mode} of vault: {vault_path}")
 
         # Execute export with appropriate method
+        result: Any  # Will hold Export/Notion/OutlineExportResult
         if format.lower() == "notion":
-            result = use_case.export(config)
+            notion_use_case = cast(NotionExportUseCase, use_case)
+            notion_config = cast(NotionExportConfig, config)
+            result = notion_use_case.export(notion_config)
         elif format.lower() == "outline":
-            result = use_case.export(config)
+            outline_use_case = cast(OutlineExportUseCase, use_case)
+            outline_config = cast(OutlineExportConfig, config)
+            result = outline_use_case.export(outline_config)
         else:
-            result = use_case.export_vault(config)
+            appflowy_use_case = cast(ExportUseCase, use_case)
+            appflowy_config = cast(ExportConfig, config)
+            result = appflowy_use_case.export_vault(appflowy_config)
 
         # Display results
         if validate_only:
@@ -307,7 +321,7 @@ def convert_command(
         raise click.Abort() from e
 
 
-def _display_validation_results(result) -> None:
+def _display_validation_results(result: Any) -> None:
     """Display validation results to user."""
     click.echo("\n" + "=" * 50)
     click.echo("VALIDATION RESULTS")
@@ -346,7 +360,7 @@ def _display_validation_results(result) -> None:
         click.echo("❌ Validation failed - please fix errors before conversion")
 
 
-def _display_conversion_results(result) -> None:
+def _display_conversion_results(result: Any) -> None:
     """Display conversion results to user."""
     click.echo("\n" + "=" * 50)
     click.echo("CONVERSION RESULTS")

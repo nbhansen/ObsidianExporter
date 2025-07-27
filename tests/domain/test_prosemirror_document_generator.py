@@ -4,8 +4,6 @@ Test cases for ProseMirrorDocumentGenerator.
 These tests validate the conversion of markdown content to ProseMirror JSON format.
 """
 
-
-
 from src.domain.models import ProseMirrorDocument
 from src.domain.prosemirror_document_generator import ProseMirrorDocumentGenerator
 
@@ -317,6 +315,6 @@ console.log('code');
         paragraph = result.content[0]
         internal_link = paragraph["content"][1]["marks"][0]
         external_link = paragraph["content"][3]["marks"][0]
-        
+
         assert internal_link["attrs"]["href"] == "/doc/abc123def4"
         assert external_link["attrs"]["href"] == "https://example.com"

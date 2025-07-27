@@ -22,7 +22,7 @@ class OutlineDocumentGenerator:
     import system, including collections, documents, and attachments.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the generator with ProseMirror converter."""
         self._prosemirror_generator = ProseMirrorDocumentGenerator()
 
@@ -61,7 +61,7 @@ class OutlineDocumentGenerator:
             doc_id = str(uuid.uuid4())
             url_id = self._generate_url_id(title)
 
-            # Build mappings - include both the formatted title and the raw filename stem
+            # Build mappings - include both the formatted title and raw filename
             document_mapping[title] = url_id
 
             # Also map the raw filename stem (without .md) for direct filename matches
@@ -69,7 +69,7 @@ class OutlineDocumentGenerator:
             if filename_stem != title:
                 document_mapping[filename_stem] = url_id
 
-            # Also map filename with spaces for common wikilink patterns like "document 1" -> "document1.md"
+            # Also map filename with spaces for common wikilink patterns
             filename_with_spaces = filename_stem.replace("-", " ").replace("_", " ")
             if filename_with_spaces != title and filename_with_spaces != filename_stem:
                 document_mapping[filename_with_spaces] = url_id
@@ -230,7 +230,9 @@ class OutlineDocumentGenerator:
         collect_folders(folder_structure)
 
         # Group contents by folder path
-        contents_by_path = {path: [] for path in folders_by_path.keys()}
+        contents_by_path: Dict[Path, List[TransformedContent]] = {
+            path: [] for path in folders_by_path.keys()
+        }
 
         for content in contents:
             # Find which folder contains this file
@@ -283,9 +285,10 @@ class OutlineDocumentGenerator:
         # Build document structure from documents
         document_structure = []
         for doc_id, document in documents.items():
+            title_slug = document['title'].lower().replace(' ', '-')
             structure_node = {
                 "id": doc_id,
-                "url": f"/doc/{document['title'].lower().replace(' ', '-')}-{document['urlId']}",
+                "url": f"/doc/{title_slug}-{document['urlId']}",
                 "title": document["title"],
                 "children": [],  # Flat structure within collection
             }

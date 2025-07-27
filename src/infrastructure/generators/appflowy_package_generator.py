@@ -8,7 +8,7 @@ assets, and configuration files following AppFlowy's template import format.
 import json
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, Set
+from typing import Any, Dict, Optional, Set
 
 from ...domain.models import AppFlowyPackage
 
@@ -108,7 +108,7 @@ class AppFlowyPackageGenerator:
             return False
 
     def _generate_config(
-        self, user_config: Dict[str, Any], package: AppFlowyPackage = None
+        self, user_config: Dict[str, Any], package: Optional[AppFlowyPackage] = None
     ) -> Dict[str, Any]:
         """
         Generate config.json manifest for AppFlowy template import.

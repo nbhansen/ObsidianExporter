@@ -8,14 +8,14 @@ Obsidian to AppFlowy conversion process.
 
 import os
 import re
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from src.domain.llm_assistant import LLMResponse
 
 try:
     from google import genai
 except ImportError:
-    genai = None
+    genai = None  # type: ignore
 
 
 class GeminiProvider:
@@ -109,12 +109,12 @@ class GeminiProvider:
         except Exception as e:
             raise Exception(f"Gemini API error: {str(e)}") from e
 
-    def _get_client(self):
+    def _get_client(self) -> Any:
         """Get or create Gemini client."""
         if self._client is None:
             if not genai:
                 raise Exception("google-genai package not installed")
-            self._client = genai.Client(api_key=self.api_key)
+            self._client = genai.Client(api_key=self.api_key)  # type: ignore
         return self._client
 
     def _infer_task_type(self, prompt: str) -> str:

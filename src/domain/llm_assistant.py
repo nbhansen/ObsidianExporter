@@ -249,7 +249,10 @@ Determine the most likely intended syntax and return the corrected version."""
 
     def _get_cache_key(self, request: ParseAssistanceRequest) -> str:
         """Generate cache key for request."""
-        key_data = f"{request.type.value}:{request.content}:{json.dumps(request.context, sort_keys=True)}"
+        key_data = (
+            f"{request.type.value}:{request.content}:"
+            f"{json.dumps(request.context, sort_keys=True)}"
+        )
         return hashlib.md5(key_data.encode()).hexdigest()
 
     def _check_rate_limit(self) -> bool:

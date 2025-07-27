@@ -79,3 +79,17 @@ sample_vault/
 # AppFlowy packages
 *.appflowy
 *.appflowy_package
+
+# Additional coverage files
+coverage.json
+htmlcov/
+
+# MyPy cache
+.mypy_cache/
+
+# Development test files
+test_*.zip
+*_test_export*
+
+# VS Code settings that might contain local paths
+.vscode/settings.json

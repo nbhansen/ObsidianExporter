@@ -6,7 +6,7 @@ following hexagonal architecture with dependency injection.
 """
 
 from pathlib import Path
-from typing import List, Protocol
+from typing import Dict, List, Optional, Protocol
 
 from .models import FolderStructure, VaultStructure, VaultStructureWithFolders
 
@@ -164,7 +164,7 @@ class VaultAnalyzer:
 
     def _find_containing_folder(
         self, file_path: Path, all_folders: List[FolderStructure]
-    ) -> FolderStructure:
+    ) -> Optional[FolderStructure]:
         """Find which folder contains the given file."""
         file_parent = file_path.parent
 
@@ -257,8 +257,8 @@ class FolderAnalyzer:
 
         # Build parent-child relationships
         # First pass: collect children for each parent
-        children_by_parent = {}
-        for folder_path, folder_obj in folder_objects.items():
+        children_by_parent: Dict[Path, List[FolderStructure]] = {}
+        for _folder_path, folder_obj in folder_objects.items():
             if folder_obj.parent_path and folder_obj.parent_path in folder_objects:
                 parent_path = folder_obj.parent_path
                 if parent_path not in children_by_parent:
@@ -268,7 +268,7 @@ class FolderAnalyzer:
         # Second pass: build hierarchy from deepest to shallowest
         # Sort folders by depth (deepest first) so children are built before parents
         sorted_by_depth = sorted(folder_objects.items(), key=lambda x: -len(x[0].parts))
-        final_folder_objects = {}
+        final_folder_objects: Dict[Path, FolderStructure] = {}
 
         for folder_path, folder_obj in sorted_by_depth:
             # Get children that have already been built

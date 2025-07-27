@@ -11,7 +11,12 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from ..domain.content_transformer import ContentTransformer
-from ..domain.models import OutlinePackage, TransformedContent, VaultStructure, VaultStructureWithFolders
+from ..domain.models import (
+    OutlinePackage,
+    TransformedContent,
+    VaultStructure,
+    VaultStructureWithFolders,
+)
 from ..domain.outline_document_generator import OutlineDocumentGenerator
 from ..domain.vault_analyzer import VaultAnalyzer
 from ..domain.vault_index_builder import VaultIndexBuilder
@@ -100,14 +105,19 @@ class OutlineExportUseCase:
         try:
             # Stage 1: Analyze vault structure with folder support
             self._report_progress(config, "Analyzing vault structure...")
-            vault_structure_with_folders = self._vault_analyzer.scan_vault_with_folders(config.vault_path)
-            result.vault_info = self._generate_vault_info_with_folders(vault_structure_with_folders)
+            vault_structure_with_folders = self._vault_analyzer.scan_vault_with_folders(
+                config.vault_path
+            )
+            result.vault_info = self._generate_vault_info_with_folders(
+                vault_structure_with_folders
+            )
 
             # Stage 2: Build vault index for wikilink resolution
             self._report_progress(config, "Building vault index...")
-            vault_index = self._vault_index_builder.build_index(config.vault_path)
+            # Build vault index for potential future use
+            self._vault_index_builder.build_index(config.vault_path)
 
-            # Stage 3: Prepare raw content for Outline export (skip content transformation)
+            # Stage 3: Prepare raw content for Outline export (skip transformation)
             # The OutlineDocumentGenerator handles wikilink resolution directly
             self._report_progress(config, "Preparing content...")
             transformed_contents = []
@@ -122,7 +132,7 @@ class OutlineExportUseCase:
                     transformed = TransformedContent(
                         original_path=md_file,
                         markdown=markdown_content,
-                        metadata={},  # Basic metadata - could extract frontmatter if needed
+                        metadata={},  # Basic metadata
                         assets=[],  # Assets - could be collected if needed
                         warnings=[],  # No warnings from transformation since we skip it
                     )
@@ -145,8 +155,12 @@ class OutlineExportUseCase:
             result.assets_processed = len(all_assets)
 
             # Create Outline package with folder support
-            outline_package = self._outline_document_generator.generate_outline_package_with_folders(
-                transformed_contents, config.package_name, vault_structure_with_folders.root_folder
+            outline_package = (
+                self._outline_document_generator.generate_outline_package_with_folders(
+                    transformed_contents,
+                    config.package_name,
+                    vault_structure_with_folders.root_folder,
+                )
             )
 
             # Stage 5: Generate ZIP package (unless validate-only)
@@ -223,7 +237,9 @@ class OutlineExportUseCase:
             "files_with_metadata": len(vault_structure.metadata),
         }
 
-    def _generate_vault_info_with_folders(self, vault_structure: VaultStructureWithFolders) -> Dict[str, Any]:
+    def _generate_vault_info_with_folders(
+        self, vault_structure: VaultStructureWithFolders
+    ) -> Dict[str, Any]:
         """
         Generate summary information about vault structure with folder details.
 

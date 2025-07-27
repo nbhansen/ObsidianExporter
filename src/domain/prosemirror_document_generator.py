@@ -22,9 +22,10 @@ class ProseMirrorDocumentGenerator:
     def __init__(self, document_mapping: Optional[Dict[str, str]] = None):
         """
         Initialize the generator with optional document mapping for wikilink resolution.
-        
+
         Args:
-            document_mapping: Map from document titles to their Outline urlIds for wikilink resolution
+            document_mapping: Map from document titles to their Outline urlIds for
+                wikilink resolution
         """
         self.document_mapping = document_mapping or {}
 
@@ -69,7 +70,7 @@ class ProseMirrorDocumentGenerator:
         code_blocks = []
         code_block_pattern = r"```[\s\S]*?```"
 
-        def replace_code_block(match):
+        def replace_code_block(match: re.Match[str]) -> str:
             code_blocks.append(match.group(0))
             return f"__CODE_BLOCK_{len(code_blocks) - 1}__"
 
@@ -84,7 +85,7 @@ class ProseMirrorDocumentGenerator:
         for block in initial_blocks:
             # Split lines within the block
             lines = block.split("\n")
-            current_block = []
+            current_block: List[str] = []
             current_block_type = None
 
             for line in lines:
@@ -128,7 +129,7 @@ class ProseMirrorDocumentGenerator:
                 blocks.append("\n".join(current_block))
 
         # Restore code blocks
-        for i, block in enumerate(blocks):
+        for i, _block in enumerate(blocks):
             for j, code_block in enumerate(code_blocks):
                 blocks[i] = blocks[i].replace(f"__CODE_BLOCK_{j}__", code_block)
 
@@ -269,17 +270,19 @@ class ProseMirrorDocumentGenerator:
         content = []
 
         # First handle wikilinks (higher priority than regular links)
-        wikilink_pattern = r"\[\[([^\]|#^]+)(?:\|([^\]]+))?(?:#([^\]]+))?(?:\^([^\]]+))?\]\]"
-        
-        def replace_wikilink(match):
+        wikilink_pattern = (
+            r"\[\[([^\]|#^]+)(?:\|([^\]]+))?(?:#([^\]]+))?(?:\^([^\]]+))?\]\]"
+        )
+
+        def replace_wikilink(match: re.Match[str]) -> str:
             target = match.group(1).strip()
             alias = match.group(2)
-            header = match.group(3)
-            block_id = match.group(4)
-            
+            # header = match.group(3)  # Not used currently
+            # block_id = match.group(4)  # Not used currently
+
             # Use alias if provided, otherwise use target
             display_text = alias.strip() if alias else target
-            
+
             # Create placeholder for processing
             return f"__WIKILINK__{display_text}__TARGET__{target}__END_WIKILINK__"
 
@@ -289,7 +292,7 @@ class ProseMirrorDocumentGenerator:
         # Handle regular markdown links
         link_pattern = r"\[([^\]]+)\]\(([^)]+)\)"
 
-        def replace_link(match):
+        def replace_link(match: re.Match[str]) -> str:
             link_text = match.group(1)
             href = match.group(2)
             return f"__LINK__{link_text}__HREF__{href}__END_LINK__"
@@ -298,40 +301,52 @@ class ProseMirrorDocumentGenerator:
         processed_text = re.sub(link_pattern, replace_link, processed_text)
 
         # Split by all placeholders (wikilinks first, then regular links)
-        parts = re.split(r"(__WIKILINK__.*?__END_WIKILINK__|__LINK__.*?__END_LINK__)", processed_text)
+        parts = re.split(
+            r"(__WIKILINK__.*?__END_WIKILINK__|__LINK__.*?__END_LINK__)", processed_text
+        )
 
         for part in parts:
             if not part:
                 continue
-                
+
             if part.startswith("__WIKILINK__"):
                 # Extract wikilink components
-                wikilink_match = re.match(r"__WIKILINK__(.*?)__TARGET__(.*?)__END_WIKILINK__", part)
+                wikilink_match = re.match(
+                    r"__WIKILINK__(.*?)__TARGET__(.*?)__END_WIKILINK__", part
+                )
                 if wikilink_match:
                     display_text = wikilink_match.group(1)
                     target = wikilink_match.group(2)
-                    
+
                     # Resolve wikilink to Outline document URL
                     href = self._resolve_wikilink_href(target)
-                    
-                    content.append({
-                        "type": "text",
-                        "text": display_text,
-                        "marks": [{"type": "link", "attrs": {"href": href, "title": None}}],
-                    })
-                    
+
+                    content.append(
+                        {
+                            "type": "text",
+                            "text": display_text,
+                            "marks": [
+                                {"type": "link", "attrs": {"href": href, "title": None}}
+                            ],
+                        }
+                    )
+
             elif part.startswith("__LINK__"):
                 # Extract regular link components
                 link_match = re.match(r"__LINK__(.*?)__HREF__(.*?)__END_LINK__", part)
                 if link_match:
                     link_text = link_match.group(1)
                     href = link_match.group(2)
-                    content.append({
-                        "type": "text",
-                        "text": link_text,
-                        "marks": [{"type": "link", "attrs": {"href": href, "title": None}}],
-                    })
-                    
+                    content.append(
+                        {
+                            "type": "text",
+                            "text": link_text,
+                            "marks": [
+                                {"type": "link", "attrs": {"href": href, "title": None}}
+                            ],
+                        }
+                    )
+
             else:
                 # Regular text - process for bold/italic formatting
                 if part:
@@ -352,7 +367,7 @@ class ProseMirrorDocumentGenerator:
         italic_pattern = r"\*([^*]+)\*"
 
         # Simple approach: if text contains formatting, create marked text
-        marks = []
+        marks: List[Dict[str, str]] = []
         clean_text = text
 
         if "**" in text:
@@ -369,7 +384,7 @@ class ProseMirrorDocumentGenerator:
                 marks.append({"type": "em"})
                 clean_text = re.sub(italic_pattern, r"\1", clean_text)
 
-        node = {"type": "text", "text": clean_text}
+        node: Dict[str, Any] = {"type": "text", "text": clean_text}
         if marks:
             node["marks"] = marks
 
@@ -378,10 +393,10 @@ class ProseMirrorDocumentGenerator:
     def _resolve_wikilink_href(self, target: str) -> str:
         """
         Resolve a wikilink target to an Outline document URL.
-        
+
         Args:
             target: The wikilink target (e.g., "Note Name" from [[Note Name]])
-            
+
         Returns:
             href for Outline document link (e.g., "/doc/abc123def4" or fallback)
         """
@@ -389,20 +404,20 @@ class ProseMirrorDocumentGenerator:
         if target in self.document_mapping:
             url_id = self.document_mapping[target]
             return f"/doc/{url_id}"
-        
+
         # Try case-insensitive match
         target_lower = target.lower()
         for title, url_id in self.document_mapping.items():
             if title.lower() == target_lower:
                 return f"/doc/{url_id}"
-        
+
         # Try partial matches (filename without extension)
         target_stem = target.replace(".md", "").strip()
         for title, url_id in self.document_mapping.items():
             title_stem = title.replace(".md", "").strip()
             if title_stem.lower() == target_stem.lower():
                 return f"/doc/{url_id}"
-        
+
         # If no match found, return a placeholder that won't break Outline
         # This will show as a regular link that doesn't work
         return f"#broken-link-{target.replace(' ', '-').lower()}"

@@ -258,7 +258,7 @@ class NotionExportUseCase:
 
         return page_name
 
-    def _create_appflowy_document(self, content) -> Dict[str, Any]:
+    def _create_appflowy_document(self, content: Any) -> Dict[str, Any]:
         """
         Create basic AppFlowy document structure from transformed content.
 
@@ -276,7 +276,7 @@ class NotionExportUseCase:
 
         # Split markdown into lines and create paragraph blocks
         lines = content.markdown.strip().split("\n")
-        current_paragraph = []
+        current_paragraph: List[str] = []
 
         for line in lines:
             line = line.strip()

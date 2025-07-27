@@ -196,7 +196,7 @@ class FallbackParser:
 
         try:
             # Parse JSON response
-            result = json.loads(response.content)
+            result: Dict[str, Any] = json.loads(response.content)
 
             # Cache result
             if self.enable_cache:
@@ -230,7 +230,8 @@ class FallbackParser:
             return None
 
         try:
-            return json.loads(response.content)
+            result: Dict[str, Any] = json.loads(response.content)
+            return result
         except json.JSONDecodeError:
             # Try to parse as simple key-value
             return {"interpretation": "unknown", "content": response.content}
@@ -287,9 +288,10 @@ class FallbackParser:
         max_level = 0
         for line in content.split("\n"):
             # Count leading '>' characters
+            match = re.match(r"^(>\s*)+", line)
             level = (
-                len(re.match(r"^(>\s*)+", line).group(0).replace(" ", ""))
-                if re.match(r"^(>\s*)+", line)
+                len(match.group(0).replace(" ", ""))
+                if match
                 else 0
             )
             max_level = max(max_level, level)

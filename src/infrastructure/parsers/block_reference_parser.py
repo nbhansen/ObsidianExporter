@@ -48,7 +48,7 @@ class BlockReferenceParser:
         # Find all code block regions to avoid transforming within them
         code_blocks = self._find_code_block_regions(content)
 
-        def replace_block_reference(match) -> str:
+        def replace_block_reference(match: re.Match[str]) -> str:
             """Replace a single block reference with HTML comment format."""
             # Check if this match is within a code block
             match_start = match.start()
@@ -56,7 +56,7 @@ class BlockReferenceParser:
             for code_start, code_end in code_blocks:
                 if code_start <= match_start < code_end:
                     # This block reference is within a code block, don't transform
-                    return match.group(0)
+                    return str(match.group(0))
 
             line_content = match.group(1)  # Content before ^
             block_id = match.group(2)  # Block ID after ^

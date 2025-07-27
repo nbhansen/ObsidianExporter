@@ -31,14 +31,17 @@ class TestNotionExportUseCase:
         """
         # Given: Mock dependencies
         vault_analyzer = Mock()
+        vault_index_builder = Mock()
         content_transformer = Mock()
         notion_document_generator = Mock()
         notion_package_generator = Mock()
         file_system = Mock()
+        file_system.read_file_content.return_value = "# Test Page\n\nContent here.\n"
 
         # When: Create use case
         use_case = NotionExportUseCase(
             vault_analyzer=vault_analyzer,
+            vault_index_builder=vault_index_builder,
             content_transformer=content_transformer,
             notion_document_generator=notion_document_generator,
             notion_package_generator=notion_package_generator,
@@ -63,19 +66,17 @@ class TestNotionExportUseCase:
             links={},
             metadata={},
         )
-        vault_analyzer.analyze_vault.return_value = vault_structure
+        vault_analyzer.scan_vault.return_value = vault_structure
 
         content_transformer = Mock()
-        transformed_contents = [
-            Mock(
-                original_path=Path("test.md"),
-                markdown="# Test Page\n\nContent here.\n",
-                metadata={"title": "Test Page"},
-                assets=[],
-                warnings=[],
-            )
-        ]
-        content_transformer.transform_content.return_value = transformed_contents
+        transformed_content = Mock(
+            original_path=Path("test.md"),
+            markdown="# Test Page\n\nContent here.\n",
+            metadata={"title": "Test Page"},
+            assets=[],
+            warnings=[],
+        )
+        content_transformer.transform_content.return_value = transformed_content
 
         notion_document_generator = Mock()
         notion_documents = [
@@ -91,9 +92,14 @@ class TestNotionExportUseCase:
 
         notion_package_generator = Mock()
         file_system = Mock()
+        file_system.read_file_content.return_value = "# Test Page\n\nContent here.\n"
+
+        vault_index_builder = Mock()
+        vault_index_builder.build_index.return_value = {}
 
         use_case = NotionExportUseCase(
             vault_analyzer=vault_analyzer,
+            vault_index_builder=vault_index_builder,
             content_transformer=content_transformer,
             notion_document_generator=notion_document_generator,
             notion_package_generator=notion_package_generator,
@@ -112,7 +118,7 @@ class TestNotionExportUseCase:
 
             # Then: Should succeed with proper orchestration
             assert result.success
-            assert vault_analyzer.analyze_vault.called
+            assert vault_analyzer.scan_vault.called
             assert content_transformer.transform_content.called
             assert notion_document_generator.convert_to_notion_format.called
             assert notion_package_generator.generate_package.called
@@ -125,7 +131,7 @@ class TestNotionExportUseCase:
         """
         # Given: Mock dependencies and progress callback
         vault_analyzer = Mock()
-        vault_analyzer.analyze_vault.return_value = VaultStructure(
+        vault_analyzer.scan_vault.return_value = VaultStructure(
             path=Path("/test"), markdown_files=[], asset_files=[], links={}, metadata={}
         )
 
@@ -135,11 +141,16 @@ class TestNotionExportUseCase:
         notion_document_generator = Mock()
         notion_package_generator = Mock()
         file_system = Mock()
+        file_system.read_file_content.return_value = "# Test Page\n\nContent here.\n"
 
         progress_callback = Mock()
 
+        vault_index_builder = Mock()
+        vault_index_builder.build_index.return_value = {}
+
         use_case = NotionExportUseCase(
             vault_analyzer=vault_analyzer,
+            vault_index_builder=vault_index_builder,
             content_transformer=content_transformer,
             notion_document_generator=notion_document_generator,
             notion_package_generator=notion_package_generator,
@@ -170,7 +181,7 @@ class TestNotionExportUseCase:
         """
         # Given: Mock dependencies where transformer raises exception
         vault_analyzer = Mock()
-        vault_analyzer.analyze_vault.return_value = VaultStructure(
+        vault_analyzer.scan_vault.return_value = VaultStructure(
             path=Path("/test"),
             markdown_files=[Path("test.md")],
             asset_files=[],
@@ -186,9 +197,14 @@ class TestNotionExportUseCase:
         notion_document_generator = Mock()
         notion_package_generator = Mock()
         file_system = Mock()
+        file_system.read_file_content.return_value = "# Test Page\n\nContent here.\n"
+
+        vault_index_builder = Mock()
+        vault_index_builder.build_index.return_value = {}
 
         use_case = NotionExportUseCase(
             vault_analyzer=vault_analyzer,
+            vault_index_builder=vault_index_builder,
             content_transformer=content_transformer,
             notion_document_generator=notion_document_generator,
             notion_package_generator=notion_package_generator,
@@ -218,14 +234,17 @@ class TestNotionExportUseCase:
         """
         # Given: Mock dependencies that produce warnings
         vault_analyzer = Mock()
-        vault_analyzer.analyze_vault.return_value = VaultStructure(
-            path=Path("/test"), markdown_files=[], asset_files=[], links={}, metadata={}
+        vault_analyzer.scan_vault.return_value = VaultStructure(
+            path=Path("/test"), markdown_files=[Path("test.md")], asset_files=[], links={}, metadata={}
         )
 
         content_transformer = Mock()
         transformed_content = Mock()
         transformed_content.warnings = ["Transformer warning"]
-        content_transformer.transform_content.return_value = [transformed_content]
+        transformed_content.original_path = Path("test.md")
+        transformed_content.markdown = "# Test content"
+        transformed_content.assets = []
+        content_transformer.transform_content.return_value = transformed_content
 
         notion_document_generator = Mock()
         notion_document_generator.convert_to_notion_format.return_value = {
@@ -236,9 +255,14 @@ class TestNotionExportUseCase:
 
         notion_package_generator = Mock()
         file_system = Mock()
+        file_system.read_file_content.return_value = "# Test Page\n\nContent here.\n"
+
+        vault_index_builder = Mock()
+        vault_index_builder.build_index.return_value = {}
 
         use_case = NotionExportUseCase(
             vault_analyzer=vault_analyzer,
+            vault_index_builder=vault_index_builder,
             content_transformer=content_transformer,
             notion_document_generator=notion_document_generator,
             notion_package_generator=notion_package_generator,
@@ -266,19 +290,29 @@ class TestNotionExportUseCase:
         """
         # Given: Mock dependencies
         vault_analyzer = Mock()
-        vault_analyzer.analyze_vault.return_value = VaultStructure(
-            path=Path("/test"), markdown_files=[], asset_files=[], links={}, metadata={}
+        vault_analyzer.scan_vault.return_value = VaultStructure(
+            path=Path("/test"), markdown_files=[Path("test.md")], asset_files=[], links={}, metadata={}
         )
 
         content_transformer = Mock()
-        content_transformer.transform_content.return_value = []
+        transformed_content = Mock()
+        transformed_content.warnings = []
+        transformed_content.original_path = Path("test.md")
+        transformed_content.markdown = "# Test content"
+        transformed_content.assets = []
+        content_transformer.transform_content.return_value = transformed_content
 
         notion_document_generator = Mock()
         notion_package_generator = Mock()
         file_system = Mock()
+        file_system.read_file_content.return_value = "# Test Page\n\nContent here.\n"
+
+        vault_index_builder = Mock()
+        vault_index_builder.build_index.return_value = {}
 
         use_case = NotionExportUseCase(
             vault_analyzer=vault_analyzer,
+            vault_index_builder=vault_index_builder,
             content_transformer=content_transformer,
             notion_document_generator=notion_document_generator,
             notion_package_generator=notion_package_generator,
@@ -298,7 +332,7 @@ class TestNotionExportUseCase:
 
             # Then: Should validate but not generate package
             assert result.success
-            assert vault_analyzer.analyze_vault.called
+            assert vault_analyzer.scan_vault.called
             assert content_transformer.transform_content.called
             assert not notion_package_generator.generate_package.called
 
@@ -317,7 +351,7 @@ class TestNotionExportUseCase:
             links={},
             metadata={},
         )
-        vault_analyzer.analyze_vault.return_value = vault_structure
+        vault_analyzer.scan_vault.return_value = vault_structure
 
         content_transformer = Mock()
         mock_content1 = Mock()
@@ -330,10 +364,8 @@ class TestNotionExportUseCase:
         mock_content2.warnings = []
         mock_content2.original_path = Path("file2.md")
         mock_content2.markdown = "# File 2\n\nMore content."
-        content_transformer.transform_content.return_value = [
-            mock_content1,
-            mock_content2,
-        ]
+        # Set up side_effect to return different objects for each call
+        content_transformer.transform_content.side_effect = [mock_content1, mock_content2]
 
         notion_document_generator = Mock()
         notion_document_generator.convert_to_notion_format.return_value = {
@@ -344,9 +376,14 @@ class TestNotionExportUseCase:
 
         notion_package_generator = Mock()
         file_system = Mock()
+        file_system.read_file_content.return_value = "# Test Page\n\nContent here.\n"
+
+        vault_index_builder = Mock()
+        vault_index_builder.build_index.return_value = {}
 
         use_case = NotionExportUseCase(
             vault_analyzer=vault_analyzer,
+            vault_index_builder=vault_index_builder,
             content_transformer=content_transformer,
             notion_document_generator=notion_document_generator,
             notion_package_generator=notion_package_generator,

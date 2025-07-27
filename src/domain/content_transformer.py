@@ -172,7 +172,7 @@ class ContentTransformer:
             # If YAML parsing fails, treat as regular content
             return markdown_content, {}
 
-    def _transform_wikilink_to_appflowy(self, resolved_wikilink) -> str:
+    def _transform_wikilink_to_appflowy(self, resolved_wikilink: Any) -> str:
         """
         Transform a resolved wikilink to AppFlowy-compatible format.
 
@@ -190,7 +190,7 @@ class ContentTransformer:
 
         if not resolved_path:
             # Shouldn't happen for non-broken links, but defensive programming
-            return original.original
+            return str(original.original)
 
         # Use alias if available, otherwise use target
         display_text = original.alias or original.target

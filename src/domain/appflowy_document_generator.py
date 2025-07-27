@@ -6,7 +6,7 @@ JSON documents following the AppFlowy document structure specification.
 """
 
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from .models import TransformedContent
 
@@ -40,7 +40,7 @@ class AppFlowyDocumentGenerator:
                 children.append(child)
 
         # Create base document structure
-        document = {"document": {"type": "page", "children": children}}
+        document: Dict[str, Any] = {"document": {"type": "page", "children": children}}
 
         # Add metadata as properties if present
         if content.metadata:
@@ -116,9 +116,10 @@ class AppFlowyDocumentGenerator:
 
             # If we're in a code block, add content
             if current_element and current_element.get("type") == "code":
-                if current_element["content"]:
-                    current_element["content"] += "\n"
-                current_element["content"] += line
+                content_str = str(current_element["content"])
+                if content_str:
+                    current_element["content"] = content_str + "\n"
+                current_element["content"] = str(current_element["content"]) + line
                 continue
 
             # Check for lists
@@ -177,12 +178,17 @@ class AppFlowyDocumentGenerator:
                     cells = cells[:-1]
 
                 if cells:  # Only add non-empty rows
-                    current_element["rows"].append(cells)
+                    rows_list = current_element.get("rows", [])
+                    if isinstance(rows_list, list):
+                        rows_list.append(cells)
+                        current_element["rows"] = rows_list
                 continue
 
             # Regular paragraph text
             if current_element and current_element.get("type") == "paragraph":
-                current_element["content"] += " " + line
+                current_element["content"] = (
+                    str(current_element["content"]) + " " + line
+                )
             else:
                 if current_element:
                     elements.append(current_element)
@@ -194,7 +200,9 @@ class AppFlowyDocumentGenerator:
 
         return elements
 
-    def _convert_element_to_appflowy(self, element: Dict[str, Any]) -> Dict[str, Any]:
+    def _convert_element_to_appflowy(
+        self, element: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """
         Convert a parsed element to AppFlowy format.
 
@@ -265,7 +273,7 @@ class AppFlowyDocumentGenerator:
             return [{"insert": ""}]
 
         # Simple implementation - handle basic formatting
-        delta = []
+        delta: List[Dict[str, Any]] = []
         current_pos = 0
 
         # Find bold patterns **text**

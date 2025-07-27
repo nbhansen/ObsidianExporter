@@ -5,9 +5,10 @@ This module provides AST-based parsing of Obsidian wikilinks using
 Python-Markdown with a custom extension, avoiding the pitfalls of regex.
 """
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Union, cast
 from xml.etree import ElementTree as etree
 
 import markdown
@@ -44,9 +45,11 @@ class WikiLinkInlineProcessor(InlineProcessor):
         self.md = md
         # Store found wikilinks for extraction
         if not hasattr(md, "wikilinks"):
-            md.wikilinks = []
+            md.wikilinks = []  # type: ignore[attr-defined]
 
-    def handleMatch(self, m, data):
+    def handleMatch(  # type: ignore[override]
+        self, m: re.Match[str], data: str
+    ) -> tuple[Union[etree.Element, str, None], Optional[int], Optional[int]]:
         """Process a matched wikilink pattern."""
         # Extract the full match and wikilink content
         full_match = m.group(0)
@@ -62,7 +65,9 @@ class WikiLinkInlineProcessor(InlineProcessor):
         wikilink = self._parse_wikilink_content(full_match, content, is_embed)
 
         # Store for later extraction
-        self.md.wikilinks.append(wikilink)
+        wikilinks_list = cast(List[WikiLink], getattr(self.md, "wikilinks", []))
+        wikilinks_list.append(wikilink)
+        self.md.wikilinks = wikilinks_list  # type: ignore[attr-defined]
 
         # Create a placeholder element (will be removed in post-processing)
         el = etree.Element("span")
@@ -110,7 +115,7 @@ class WikiLinkExtension(Extension):
     while maintaining context awareness of the markdown AST.
     """
 
-    def extendMarkdown(self, md):
+    def extendMarkdown(self, md: markdown.Markdown) -> None:
         # Pattern matches both [[...]] and ![[...]]
         # Priority 175 ensures it runs before other inline patterns
         wikilink_pattern = WikiLinkInlineProcessor(r"!?\[\[[^\]]+\]\]", md)
@@ -124,7 +129,7 @@ class WikiLinkParser:
     Uses Python-Markdown with custom extension for reliable, context-aware parsing.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.md = markdown.Markdown(extensions=[WikiLinkExtension()])
 
     def extract_wikilinks(self, content: str) -> List[WikiLink]:
@@ -138,13 +143,14 @@ class WikiLinkParser:
             List of WikiLink objects found in the content
         """
         # Reset wikilinks for this parse
-        self.md.wikilinks = []
+        self.md.wikilinks = []  # type: ignore[attr-defined]
 
         # Parse the markdown (this triggers wikilink extraction)
         self.md.convert(content)
 
         # Return found wikilinks
-        return self.md.wikilinks.copy()
+        wikilinks_list = cast(List[WikiLink], getattr(self.md, "wikilinks", []))
+        return list(wikilinks_list)
 
     def extract_from_file(self, file_path: Path) -> List[WikiLink]:
         """
