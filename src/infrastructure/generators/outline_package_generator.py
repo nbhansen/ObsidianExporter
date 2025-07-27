@@ -9,7 +9,7 @@ import json
 import re
 import zipfile
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Set
 
 from ...domain.models import OutlinePackage
 
@@ -134,15 +134,78 @@ class OutlinePackageGenerator:
         safe_name = self._sanitize_filename(collection["name"])
         filename = f"{safe_name}.json"
 
+        # Extract document IDs from collection's documentStructure
+        collection_doc_ids = self._extract_document_ids(collection)
+
+        # Filter documents to only include those in this collection
+        collection_documents = {
+            doc_id: doc_data
+            for doc_id, doc_data in documents.items()
+            if doc_id in collection_doc_ids
+        }
+
+        # Filter attachments to only include those belonging to collection documents
+        collection_attachments = {
+            att_id: att_data
+            for att_id, att_data in attachments.items()
+            if att_data.get("documentId") in collection_doc_ids
+        }
+
         # Create collection JSON structure
         collection_data = {
             "collection": collection,
-            "documents": documents,
-            "attachments": attachments,
+            "documents": collection_documents,  # Now filtered!
+            "attachments": collection_attachments,  # Now filtered!
         }
 
         collection_json = json.dumps(collection_data, indent=2)
         zf.writestr(filename, collection_json)
+
+    def _extract_document_ids(self, collection: Dict) -> Set[str]:
+        """
+        Recursively extract all document IDs from a collection's documentStructure.
+
+        Handles nested document structures by traversing the 'children' property
+        of each document node to ensure all nested documents are included.
+
+        Args:
+            collection: Collection dictionary containing documentStructure
+
+        Returns:
+            Set of all document IDs found in the structure (including nested ones)
+        """
+        doc_ids: Set[str] = set()
+
+        # Handle missing or invalid documentStructure
+        if "documentStructure" not in collection:
+            return doc_ids
+
+        document_structure = collection.get("documentStructure", [])
+        if not isinstance(document_structure, list):
+            return doc_ids
+
+        # Define recursive function to traverse document nodes
+        def extract_from_node(node: Dict) -> None:
+            """Recursively extract IDs from a document node and its children."""
+            if not isinstance(node, dict):
+                return
+
+            # Extract ID from current node
+            node_id = node.get("id")
+            if node_id:
+                doc_ids.add(node_id)
+
+            # Recursively process children
+            children = node.get("children", [])
+            if isinstance(children, list):
+                for child in children:
+                    extract_from_node(child)
+
+        # Process all top-level document nodes
+        for doc_node in document_structure:
+            extract_from_node(doc_node)
+
+        return doc_ids
 
     def _add_attachments(
         self,
