@@ -115,6 +115,17 @@ python -m src.cli convert ~/Documents/MyVault --format outline --output ~/Deskto
 4. Choose "JSON Export" as import type
 5. Upload the generated ZIP file
 
+## Preparing your Obsidian vault
+
+For best results, clean up wikilinks before export:
+
+- **Fix broken links**: Use Obsidian's "Broken links" core plugin to identify and fix missing targets
+- **Match filenames**: Ensure `[[Link Name]]` matches actual filename `Link Name.md`
+- **Check case sensitivity**: `[[SurfaceStreams]]` should match `SurfaceStreams.md`, not `surface-streams.md`
+- **Use validation**: Run with `--validate-only` to see potential issues before conversion
+
+Well-maintained vaults typically have <50 broken links. More indicates naming mismatches rather than missing content.
+
 ## Requirements
 
 - Python 3.11+
