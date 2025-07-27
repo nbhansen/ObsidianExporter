@@ -13,10 +13,12 @@ from src.application.outline_export_use_case import (
 )
 from src.domain.content_transformer import ContentTransformer
 from src.domain.models import (
+    FolderStructure,
     OutlinePackage,
     TransformedContent,
     VaultIndex,
     VaultStructure,
+    VaultStructureWithFolders,
 )
 from src.domain.outline_document_generator import OutlineDocumentGenerator
 from src.domain.vault_analyzer import VaultAnalyzer
@@ -50,6 +52,34 @@ class TestOutlineExportUseCase:
             file_system=self.file_system,
         )
 
+    def _create_mock_vault_structure_with_folders(self, vault_path, markdown_files, asset_files=None, links=None, metadata=None):
+        """Create a mock VaultStructureWithFolders for testing."""
+        asset_files = asset_files or []
+        links = links or {}
+        metadata = metadata or {}
+        
+        root_folder = FolderStructure(
+            path=vault_path,
+            name=vault_path.name,
+            parent_path=None,
+            child_folders=[],
+            markdown_files=markdown_files,
+            level=0,
+        )
+        
+        folder_mapping = {file: root_folder for file in markdown_files}
+        
+        return VaultStructureWithFolders(
+            path=vault_path,
+            root_folder=root_folder,
+            all_folders=[root_folder],
+            markdown_files=markdown_files,
+            asset_files=asset_files,
+            folder_mapping=folder_mapping,
+            links=links,
+            metadata=metadata,
+        )
+
     def test_successful_export(self):
         """Test complete successful export pipeline."""
         # Given: Valid export configuration
@@ -61,15 +91,26 @@ class TestOutlineExportUseCase:
             package_name="Test Vault",
         )
 
-        # Mock vault structure
-        vault_structure = VaultStructure(
+        # Mock vault structure with folders
+        root_folder = FolderStructure(
             path=vault_path,
+            name="vault",
+            parent_path=None,
+            child_folders=[],
+            markdown_files=[Path("test.md")],
+            level=0,
+        )
+        vault_structure_with_folders = VaultStructureWithFolders(
+            path=vault_path,
+            root_folder=root_folder,
+            all_folders=[root_folder],
             markdown_files=[Path("test.md")],
             asset_files=[Path("image.png")],
+            folder_mapping={Path("test.md"): root_folder},
             links={"test": ["other"]},
             metadata={"test": {"title": "Test"}},
         )
-        self.vault_analyzer.scan_vault.return_value = vault_structure
+        self.vault_analyzer.scan_vault_with_folders.return_value = vault_structure_with_folders
 
         # Mock vault index
         vault_index = VaultIndex(
@@ -100,7 +141,7 @@ class TestOutlineExportUseCase:
             attachments={},
             warnings=[],
         )
-        self.outline_document_generator.generate_outline_package.return_value = (
+        self.outline_document_generator.generate_outline_package_with_folders.return_value = (
             outline_package
         )
 
@@ -114,14 +155,13 @@ class TestOutlineExportUseCase:
         assert result.success is True
         assert result.output_path == output_path
         assert result.files_processed == 1
-        assert result.assets_processed == 1
+        assert result.assets_processed == 0  # Assets not processed in direct mode
         assert len(result.errors) == 0
 
         # Verify all dependencies were called correctly
-        self.vault_analyzer.scan_vault.assert_called_once_with(vault_path)
+        self.vault_analyzer.scan_vault_with_folders.assert_called_once_with(vault_path)
         self.vault_index_builder.build_index.assert_called_once_with(vault_path)
-        self.content_transformer.transform_content.assert_called_once()
-        self.outline_document_generator.generate_outline_package.assert_called_once()
+        self.outline_document_generator.generate_outline_package_with_folders.assert_called_once()
         self.outline_package_generator.generate_package.assert_called_once()
 
     def test_export_with_multiple_files(self):
@@ -133,15 +173,30 @@ class TestOutlineExportUseCase:
             package_name="Multi Vault",
         )
 
-        # Mock vault structure with multiple files
-        vault_structure = VaultStructure(
+        # Mock vault structure with multiple files and folders
+        root_folder = FolderStructure(
             path=Path("/test/vault"),
+            name="vault",
+            parent_path=None,
+            child_folders=[],
+            markdown_files=[Path("doc1.md"), Path("doc2.md"), Path("doc3.md")],
+            level=0,
+        )
+        vault_structure_with_folders = VaultStructureWithFolders(
+            path=Path("/test/vault"),
+            root_folder=root_folder,
+            all_folders=[root_folder],
             markdown_files=[Path("doc1.md"), Path("doc2.md"), Path("doc3.md")],
             asset_files=[],
+            folder_mapping={
+                Path("doc1.md"): root_folder,
+                Path("doc2.md"): root_folder,
+                Path("doc3.md"): root_folder,
+            },
             links={},
             metadata={},
         )
-        self.vault_analyzer.scan_vault.return_value = vault_structure
+        self.vault_analyzer.scan_vault_with_folders.return_value = vault_structure_with_folders
 
         # Mock other dependencies
         self.vault_index_builder.build_index.return_value = Mock()
@@ -162,7 +217,7 @@ class TestOutlineExportUseCase:
         # Mock Outline generation with proper structure
         mock_outline_package = Mock()
         mock_outline_package.attachments = {}
-        self.outline_document_generator.generate_outline_package.return_value = (
+        self.outline_document_generator.generate_outline_package_with_folders.return_value = (
             mock_outline_package
         )
         self.outline_package_generator.generate_package.return_value = Path(
@@ -175,7 +230,8 @@ class TestOutlineExportUseCase:
         # Then: All files should be processed
         assert result.success is True
         assert result.files_processed == 3
-        assert self.content_transformer.transform_content.call_count == 3
+        # Content transformation is skipped in direct mode for Outline export
+        assert self.content_transformer.transform_content.call_count == 0
 
     def test_export_with_warnings(self):
         """Test export preserves warnings from content transformation."""
@@ -186,15 +242,12 @@ class TestOutlineExportUseCase:
             package_name="Warning Vault",
         )
 
-        # Mock vault structure
-        vault_structure = VaultStructure(
-            path=Path("/test/vault"),
+        # Mock vault structure with folders
+        vault_structure_with_folders = self._create_mock_vault_structure_with_folders(
+            vault_path=Path("/test/vault"),
             markdown_files=[Path("problem.md")],
-            asset_files=[],
-            links={},
-            metadata={},
         )
-        self.vault_analyzer.scan_vault.return_value = vault_structure
+        self.vault_analyzer.scan_vault_with_folders.return_value = vault_structure_with_folders
 
         # Mock dependencies
         self.vault_index_builder.build_index.return_value = Mock()
@@ -213,7 +266,7 @@ class TestOutlineExportUseCase:
         # Mock other dependencies
         mock_outline_package = Mock()
         mock_outline_package.attachments = {}
-        self.outline_document_generator.generate_outline_package.return_value = (
+        self.outline_document_generator.generate_outline_package_with_folders.return_value = (
             mock_outline_package
         )
         self.outline_package_generator.generate_package.return_value = Path(
@@ -223,11 +276,9 @@ class TestOutlineExportUseCase:
         # When: We execute the export
         result = self.use_case.export(config)
 
-        # Then: Warnings should be preserved
+        # Then: Export should succeed (no transformation warnings in direct mode)
         assert result.success is True
-        assert len(result.warnings) == 2
-        assert "Broken link found" in result.warnings
-        assert "Invalid syntax" in result.warnings
+        assert len(result.warnings) == 0  # No transformation warnings in direct mode
 
     def test_export_handles_file_read_errors(self):
         """Test export handles file reading errors gracefully."""
@@ -238,15 +289,12 @@ class TestOutlineExportUseCase:
             package_name="Error Vault",
         )
 
-        # Mock vault structure
-        vault_structure = VaultStructure(
-            path=Path("/test/vault"),
+        # Mock vault structure with folders
+        vault_structure_with_folders = self._create_mock_vault_structure_with_folders(
+            vault_path=Path("/test/vault"),
             markdown_files=[Path("readable.md"), Path("unreadable.md")],
-            asset_files=[],
-            links={},
-            metadata={},
         )
-        self.vault_analyzer.scan_vault.return_value = vault_structure
+        self.vault_analyzer.scan_vault_with_folders.return_value = vault_structure_with_folders
 
         # Mock dependencies
         self.vault_index_builder.build_index.return_value = Mock()
@@ -272,7 +320,7 @@ class TestOutlineExportUseCase:
         # Mock other dependencies
         mock_outline_package = Mock()
         mock_outline_package.attachments = {}
-        self.outline_document_generator.generate_outline_package.return_value = (
+        self.outline_document_generator.generate_outline_package_with_folders.return_value = (
             mock_outline_package
         )
         self.outline_package_generator.generate_package.return_value = Path(
@@ -300,13 +348,13 @@ class TestOutlineExportUseCase:
         )
 
         # Mock dependencies
-        self.vault_analyzer.scan_vault.return_value = Mock()
+        self.vault_analyzer.scan_vault_with_folders.return_value = Mock()
         self.vault_index_builder.build_index.return_value = Mock()
         self.file_system.read_file_content.return_value = "# Content"
         self.content_transformer.transform_content.return_value = Mock()
         mock_outline_package = Mock()
         mock_outline_package.attachments = {}
-        self.outline_document_generator.generate_outline_package.return_value = (
+        self.outline_document_generator.generate_outline_package_with_folders.return_value = (
             mock_outline_package
         )
 
@@ -333,7 +381,7 @@ class TestOutlineExportUseCase:
         )
 
         # Mock minimal dependencies for successful run
-        self.vault_analyzer.scan_vault.return_value = Mock(
+        self.vault_analyzer.scan_vault_with_folders.return_value = Mock(
             markdown_files=[Path("test.md")], asset_files=[]
         )
         self.vault_index_builder.build_index.return_value = Mock()
@@ -343,7 +391,7 @@ class TestOutlineExportUseCase:
         )
         mock_outline_package = Mock()
         mock_outline_package.attachments = {}
-        self.outline_document_generator.generate_outline_package.return_value = (
+        self.outline_document_generator.generate_outline_package_with_folders.return_value = (
             mock_outline_package
         )
         self.outline_package_generator.generate_package.return_value = Path(
@@ -368,15 +416,15 @@ class TestOutlineExportUseCase:
             package_name="Info Vault",
         )
 
-        # Mock vault structure with various files
-        vault_structure = VaultStructure(
-            path=Path("/test/vault"),
+        # Mock vault structure with various files and folders
+        vault_structure_with_folders = self._create_mock_vault_structure_with_folders(
+            vault_path=Path("/test/vault"),
             markdown_files=[Path("doc1.md"), Path("doc2.md")],
             asset_files=[Path("img1.png"), Path("img2.jpg"), Path("doc.pdf")],
             links={"doc1": ["doc2"], "doc2": ["doc1"]},
             metadata={"doc1": {"title": "Doc 1"}, "doc2": {"author": "Test"}},
         )
-        self.vault_analyzer.scan_vault.return_value = vault_structure
+        self.vault_analyzer.scan_vault_with_folders.return_value = vault_structure_with_folders
 
         # Mock other dependencies
         self.vault_index_builder.build_index.return_value = Mock()
@@ -384,7 +432,7 @@ class TestOutlineExportUseCase:
         self.content_transformer.transform_content.return_value = Mock(warnings=[])
         mock_outline_package = Mock()
         mock_outline_package.attachments = {}
-        self.outline_document_generator.generate_outline_package.return_value = (
+        self.outline_document_generator.generate_outline_package_with_folders.return_value = (
             mock_outline_package
         )
         self.outline_package_generator.generate_package.return_value = Path(

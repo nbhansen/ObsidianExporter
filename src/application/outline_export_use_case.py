@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from ..domain.content_transformer import ContentTransformer
-from ..domain.models import OutlinePackage, TransformedContent, VaultStructure
+from ..domain.models import OutlinePackage, TransformedContent, VaultStructure, VaultStructureWithFolders
 from ..domain.outline_document_generator import OutlineDocumentGenerator
 from ..domain.vault_analyzer import VaultAnalyzer
 from ..domain.vault_index_builder import VaultIndexBuilder
@@ -98,10 +98,10 @@ class OutlineExportUseCase:
         result = OutlineExportResult(success=False)
 
         try:
-            # Stage 1: Analyze vault structure
+            # Stage 1: Analyze vault structure with folder support
             self._report_progress(config, "Analyzing vault structure...")
-            vault_structure = self._vault_analyzer.scan_vault(config.vault_path)
-            result.vault_info = self._generate_vault_info(vault_structure)
+            vault_structure_with_folders = self._vault_analyzer.scan_vault_with_folders(config.vault_path)
+            result.vault_info = self._generate_vault_info_with_folders(vault_structure_with_folders)
 
             # Stage 2: Build vault index for wikilink resolution
             self._report_progress(config, "Building vault index...")
@@ -112,7 +112,7 @@ class OutlineExportUseCase:
             self._report_progress(config, "Preparing content...")
             transformed_contents = []
 
-            for md_file in vault_structure.markdown_files:
+            for md_file in vault_structure_with_folders.markdown_files:
                 try:
                     # Read raw file content without transformation
                     markdown_content = self._file_system.read_file_content(md_file)
@@ -123,8 +123,8 @@ class OutlineExportUseCase:
                         original_path=md_file,
                         markdown=markdown_content,
                         metadata={},  # Basic metadata - could extract frontmatter if needed
-                        assets=[],    # Assets - could be collected if needed  
-                        warnings=[]   # No warnings from transformation since we skip it
+                        assets=[],  # Assets - could be collected if needed
+                        warnings=[],  # No warnings from transformation since we skip it
                     )
                     transformed_contents.append(transformed)
 
@@ -144,9 +144,9 @@ class OutlineExportUseCase:
                 all_assets.extend(content.assets)
             result.assets_processed = len(all_assets)
 
-            # Create Outline package
-            outline_package = self._outline_document_generator.generate_outline_package(
-                transformed_contents, config.package_name
+            # Create Outline package with folder support
+            outline_package = self._outline_document_generator.generate_outline_package_with_folders(
+                transformed_contents, config.package_name, vault_structure_with_folders.root_folder
             )
 
             # Stage 5: Generate ZIP package (unless validate-only)
@@ -221,6 +221,27 @@ class OutlineExportUseCase:
             "asset_files": len(vault_structure.asset_files),
             "total_links": sum(len(links) for links in vault_structure.links.values()),
             "files_with_metadata": len(vault_structure.metadata),
+        }
+
+    def _generate_vault_info_with_folders(self, vault_structure: VaultStructureWithFolders) -> Dict[str, Any]:
+        """
+        Generate summary information about vault structure with folder details.
+
+        Args:
+            vault_structure: Analyzed vault structure with folders
+
+        Returns:
+            Dictionary with vault statistics and folder information
+        """
+        return {
+            "vault_path": str(vault_structure.path),
+            "markdown_files": len(vault_structure.markdown_files),
+            "asset_files": len(vault_structure.asset_files),
+            "total_links": sum(len(links) for links in vault_structure.links.values()),
+            "files_with_metadata": len(vault_structure.metadata),
+            "total_folders": len(vault_structure.all_folders),
+            "root_folder": vault_structure.root_folder.name,
+            "folder_mapping": len(vault_structure.folder_mapping),
         }
 
     def _create_attachments_mapping(

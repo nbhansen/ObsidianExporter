@@ -92,3 +92,29 @@ class ProseMirrorDocument:
     type: str  # Node type (e.g., "doc", "paragraph", "text")
     content: List[Dict[str, Any]]  # Child nodes
     attrs: Optional[Dict[str, Any]] = None  # Node attributes
+
+
+@dataclass(frozen=True)
+class FolderStructure:
+    """Immutable representation of folder hierarchy in an Obsidian vault."""
+
+    path: Path
+    name: str
+    parent_path: Optional[Path]
+    child_folders: List["FolderStructure"]
+    markdown_files: List[Path]
+    level: int  # depth in hierarchy (0 = root)
+
+
+@dataclass(frozen=True)
+class VaultStructureWithFolders:
+    """Immutable representation of an Obsidian vault structure with folder hierarchy."""
+
+    path: Path
+    root_folder: FolderStructure
+    all_folders: List[FolderStructure]
+    markdown_files: List[Path]
+    asset_files: List[Path]
+    folder_mapping: Dict[Path, FolderStructure]  # file -> folder mapping
+    links: Dict[str, List[str]]
+    metadata: Dict[str, Dict[str, Any]]
