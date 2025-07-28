@@ -1,6 +1,7 @@
 click>=8.0.0
 markdown>=3.4.0
 pyyaml>=6.0.0
+google-genai>=1.26.0
 
 # Development dependencies
 pytest>=7.0.0
