@@ -93,3 +93,7 @@ test_*.zip
 
 # VS Code settings that might contain local paths
 .vscode/settings.json
+
+# Claude AI development files - personal configuration
+CLAUDE.md
+.claude/
