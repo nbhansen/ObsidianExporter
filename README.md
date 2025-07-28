@@ -160,6 +160,33 @@ For best results, clean up wikilinks before export:
 
 Well-maintained vaults typically have <50 broken links. More indicates naming mismatches rather than missing content.
 
+### Preflight Scripts
+
+For **Outline exports specifically**, you may need to convert wikilinks to standard markdown format first. Use the preflight scripts in the `preflight-scripts/` folder:
+
+```bash
+# Navigate to your vault directory
+cd /path/to/your/obsidian/vault
+
+# Convert wikilinks to standard markdown (TESTED WITH OUTLINE)
+python /path/to/ObsidianExporter/preflight-scripts/convert_wikilinks_final.py
+
+# If something goes wrong, restore original wikilinks
+python /path/to/ObsidianExporter/preflight-scripts/restore_wikilinks.py
+```
+
+**⚠️ Important Notes:**
+- These scripts have been **tested specifically with Outline exports**
+- Make a backup of your vault before running any conversion scripts
+- The converter includes testing functionality - it will show you a preview before making changes
+- `convert_wikilinks_final.py` converts `[[wikilinks]]` to `[standard markdown links](file.md)`
+- `restore_wikilinks.py` can restore malformed conversions if needed
+
+**When to use preflight scripts:**
+- If Outline import doesn't handle wikilinks properly after export
+- If you experience linking issues in the imported Outline documents
+- Only use if the standard export process doesn't work for your use case
+
 ## Requirements
 
 - Python 3.11+
