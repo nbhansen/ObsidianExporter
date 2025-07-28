@@ -17,7 +17,6 @@ from src.domain.models import (
     OutlinePackage,
     TransformedContent,
     VaultIndex,
-    VaultStructure,
     VaultStructureWithFolders,
 )
 from src.domain.outline_document_generator import OutlineDocumentGenerator
@@ -57,7 +56,7 @@ class TestOutlineExportUseCase:
         asset_files = asset_files or []
         links = links or {}
         metadata = metadata or {}
-        
+
         root_folder = FolderStructure(
             path=vault_path,
             name=vault_path.name,
@@ -66,9 +65,9 @@ class TestOutlineExportUseCase:
             markdown_files=markdown_files,
             level=0,
         )
-        
-        folder_mapping = {file: root_folder for file in markdown_files}
-        
+
+        folder_mapping = dict.fromkeys(markdown_files, root_folder)
+
         return VaultStructureWithFolders(
             path=vault_path,
             root_folder=root_folder,

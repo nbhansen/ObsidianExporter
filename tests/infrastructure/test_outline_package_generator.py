@@ -695,7 +695,7 @@ class TestOutlinePackageGenerator:
             # Verify NO cross-contamination
             all_collections = [root, folder_a, subfolder, folder_b]
             all_doc_ids = {"root-doc", "doc-a1", "doc-a2", "doc-sub", "doc-b1"}
-            
+
             for collection in all_collections:
                 collection_docs = set(collection["documents"].keys())
                 # Each collection should have a subset of all docs
