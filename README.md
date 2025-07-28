@@ -23,7 +23,69 @@ This tool:
 - Generates properly structured documents for each target system
 - Creates importable packages (ZIP files) for easy migration
 
-## Installation
+## Quick Start (5 Steps)
+
+**Step 1:** Copy this repository to your computer
+```bash
+git clone https://github.com/username/ObsidianExporter.git
+cd ObsidianExporter
+```
+
+**Step 2:** Set up Python environment
+```bash
+python -m venv venv
+# On Windows:
+venv\Scripts\activate
+# On Mac/Linux:
+source venv/bin/activate
+```
+
+**Step 3:** Install required packages
+```bash
+pip install -r requirements.txt
+```
+
+**Step 4:** Convert your vault (replace with your vault path)
+```bash
+# For Outline:
+python -m src.cli convert "C:\Users\YourName\Documents\MyVault" --format outline
+
+# For AppFlowy:
+python -m src.cli convert "C:\Users\YourName\Documents\MyVault" --format appflowy
+
+# For Notion (via AppFlowy):
+python -m src.cli convert "C:\Users\YourName\Documents\MyVault" --format notion
+```
+
+**Step 5:** Import the ZIP file
+- Find the generated ZIP file in the same folder
+- Open your target app (Outline/AppFlowy/Notion)
+- Go to Settings → Import
+- Upload the ZIP file
+
+**Done!** Your notes are now in your new app.
+
+### Common Issues & Solutions
+
+**"Command not found" error:**
+- Make sure Python is installed: `python --version`
+- Try `python3` instead of `python`
+
+**"No module named src" error:**
+- Make sure you're in the ObsidianExporter folder: `cd ObsidianExporter`
+- Make sure venv is activated (you should see `(venv)` in your terminal)
+
+**Import fails in target app:**
+- For Outline: Try using preflight scripts (see section below)
+- Check that your vault folder contains a `.obsidian` folder
+- Run with `--validate-only` first to check for issues
+
+**Need help finding your vault path?**
+- Windows: Usually `C:\Users\YourName\Documents\ObsidianVault`
+- Mac: Usually `/Users/YourName/Documents/ObsidianVault`
+- In Obsidian: Settings → About → Vault path
+
+## Detailed Installation & Usage
 
 ```bash
 git clone <repository-url>
