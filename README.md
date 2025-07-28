@@ -1,3 +1,12 @@
+```
+   ___  _         _     _ _            _____                       _            
+  / _ \| |__  ___(_) __| (_) __ _ _ __|  ___|_  ___ __   ___  _ __| |_ ___ _ __ 
+ | | | | '_ \/ __| |/ _` | |/ _` | '_ \ |_  \ \/ / '_ \ / _ \| '__| __/ _ \ '__|
+ | |_| | |_) \__ \ | (_| | | (_| | | | |  _| >  <| |_) | (_) | |  | ||  __/ |   
+  \___/|_.__/|___/_|\__,_|_|\__,_|_| |_|_|  /_/\_\ .__/ \___/|_|   \__\___|_|   
+                                                 |_|                          
+```
+
 # ObsidianExporter
 
 Converts Obsidian vaults to importable packages for AppFlowy, Notion, and Outline. Preserves markdown content, internal document links, assets, and folder structure.
@@ -71,6 +80,9 @@ python -m src.cli convert ~/Documents/MyVault --format outline --validate-only
 
 # If validation passes, convert with progress
 python -m src.cli convert ~/Documents/MyVault --format outline --output ~/Desktop/my-notes.zip --verbose
+
+# Or use nested documents for better hierarchy
+python -m src.cli convert ~/Documents/MyVault --format outline --nested-documents --output ~/Desktop/my-notes.zip
 ```
 
 ## What gets converted
@@ -114,6 +126,28 @@ python -m src.cli convert ~/Documents/MyVault --format outline --output ~/Deskto
 3. Go to Settings → Import
 4. Choose "JSON Export" as import type
 5. Upload the generated ZIP file
+
+#### Nested Documents Mode
+For Outline exports, use the `--nested-documents` flag to create a hierarchical structure:
+
+```bash
+# Traditional: Each folder becomes a separate collection
+python -m src.cli convert /path/to/vault --format outline
+
+# Nested: Single collection with nested document hierarchy
+python -m src.cli convert /path/to/vault --format outline --nested-documents
+```
+
+**Changes with `--nested-documents`:**
+- Single collection instead of multiple collections
+- Folders become documents with folder icons
+- Uses Outline's `parentDocumentId` for hierarchy
+- Preserves wikilinks to folders
+- Creates nested structure in sidebar
+
+**When to use:**
+- Use `--nested-documents` for vault-wide organization with folder hierarchy
+- Use default mode for independent collections per folder
 
 ## Preparing your Obsidian vault
 

@@ -158,14 +158,18 @@ class OutlineExportUseCase:
             # Create Outline package with folder support
             if config.nested_documents:
                 # Use nested documents approach (folders as documents)
-                outline_package = self._outline_document_generator.generate_outline_package_with_nested_documents(
-                    transformed_contents,
-                    config.package_name,
-                    vault_structure_with_folders.root_folder,
+                generator = self._outline_document_generator
+                outline_package = (
+                    generator.generate_outline_package_with_nested_documents(
+                        transformed_contents,
+                        config.package_name,
+                        vault_structure_with_folders.root_folder,
+                    )
                 )
             else:
                 # Use traditional approach (folders as collections)
-                outline_package = self._outline_document_generator.generate_outline_package_with_folders(
+                generator = self._outline_document_generator
+                outline_package = generator.generate_outline_package_with_folders(
                     transformed_contents,
                     config.package_name,
                     vault_structure_with_folders.root_folder,
