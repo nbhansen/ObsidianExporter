@@ -35,6 +35,7 @@ class OutlineExportConfig:
     package_name: str
     progress_callback: Optional[Callable[[str], None]] = None
     validate_only: bool = False
+    nested_documents: bool = False
 
 
 @dataclass
@@ -155,13 +156,20 @@ class OutlineExportUseCase:
             result.assets_processed = len(all_assets)
 
             # Create Outline package with folder support
-            outline_package = (
-                self._outline_document_generator.generate_outline_package_with_folders(
+            if config.nested_documents:
+                # Use nested documents approach (folders as documents)
+                outline_package = self._outline_document_generator.generate_outline_package_with_nested_documents(
                     transformed_contents,
                     config.package_name,
                     vault_structure_with_folders.root_folder,
                 )
-            )
+            else:
+                # Use traditional approach (folders as collections)
+                outline_package = self._outline_document_generator.generate_outline_package_with_folders(
+                    transformed_contents,
+                    config.package_name,
+                    vault_structure_with_folders.root_folder,
+                )
 
             # Stage 5: Generate ZIP package (unless validate-only)
             if not config.validate_only:

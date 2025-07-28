@@ -195,6 +195,15 @@ def cli() -> None:
     default="appflowy",
     help="Export format: 'appflowy', 'notion', or 'outline'",
 )
+@click.option(
+    "--nested-documents",
+    is_flag=True,
+    default=False,
+    help=(
+        "For Outline export: use nested documents instead of "
+        "multiple collections for folders"
+    ),
+)
 def convert_command(
     vault_path: Path,
     output: Optional[Path],
@@ -202,6 +211,7 @@ def convert_command(
     verbose: bool,
     validate_only: bool,
     format: str,
+    nested_documents: bool,
 ) -> None:
     """
     Convert an Obsidian vault to AppFlowy, Notion, or Outline package.
@@ -214,6 +224,7 @@ def convert_command(
         obsidian-to-appflowy convert /path/to/vault --format outline
         obsidian-to-appflowy convert /path/to/vault --output my-export.zip -f outline
         obsidian-to-appflowy convert /path/to/vault --validate-only --format outline
+        obsidian-to-appflowy convert /path/to/vault --format outline --nested-documents
     """
     # Validate inputs
     if not vault_path.exists():
@@ -274,6 +285,7 @@ def convert_command(
                 package_name=name,
                 progress_callback=progress_callback,
                 validate_only=validate_only,
+                nested_documents=nested_documents,
             )
         else:
             use_case = create_export_use_case()

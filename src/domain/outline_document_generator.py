@@ -285,7 +285,7 @@ class OutlineDocumentGenerator:
         # Build document structure from documents
         document_structure = []
         for doc_id, document in documents.items():
-            title_slug = document['title'].lower().replace(' ', '-')
+            title_slug = document["title"].lower().replace(" ", "-")
             structure_node = {
                 "id": doc_id,
                 "url": f"/doc/{title_slug}-{document['urlId']}",
@@ -394,6 +394,259 @@ class OutlineDocumentGenerator:
             "title": title,
             "children": [],  # Flat structure for now
         }
+
+    def generate_outline_package_with_nested_documents(
+        self,
+        contents: List[TransformedContent],
+        vault_name: str,
+        folder_structure: FolderStructure,
+    ) -> OutlinePackage:
+        """
+        Generate Outline package with folders as nested documents.
+
+        Instead of creating multiple collections, this creates a single collection
+        with folders represented as documents that can contain child documents.
+
+        Args:
+            contents: List of transformed content from vault
+            vault_name: Name of the vault/collection
+            folder_structure: The folder hierarchy of the vault
+
+        Returns:
+            OutlinePackage with nested document structure
+        """
+        # Generate UUIDs and metadata
+        collection_id = str(uuid.uuid4())
+        current_time = datetime.now().isoformat() + "Z"
+        metadata = self._create_metadata(current_time)
+
+        # Build document mappings for wikilink resolution
+        document_mapping = {}
+        doc_ids = {}
+        folder_doc_ids = {}  # Track document IDs for folders
+
+        # First, create document IDs and mappings for all folders
+        for folder in self._iterate_folders(folder_structure):
+            folder_doc_id = str(uuid.uuid4())
+            folder_doc_ids[folder.path] = folder_doc_id
+
+            # Add folder to document mapping for wikilink resolution
+            folder_url_id = self._generate_url_id(folder.name)
+            document_mapping[folder.name] = folder_url_id
+
+            # Also map common variations of folder names
+            folder_name_lower = folder.name.lower()
+            if folder_name_lower != folder.name:
+                document_mapping[folder_name_lower] = folder_url_id
+
+        # Then, create mappings for all markdown documents
+        for content in contents:
+            title = content.metadata.get("title")
+            if not title:
+                title = content.original_path.stem.replace("_", " ").replace("-", " ")
+                title = " ".join(word.capitalize() for word in title.split())
+
+            doc_id = str(uuid.uuid4())
+            url_id = self._generate_url_id(title)
+
+            # Build mappings
+            document_mapping[title] = url_id
+            filename_stem = content.original_path.stem
+            if filename_stem != title:
+                document_mapping[filename_stem] = url_id
+
+            filename_with_spaces = filename_stem.replace("-", " ").replace("_", " ")
+            if filename_with_spaces != title and filename_with_spaces != filename_stem:
+                document_mapping[filename_with_spaces] = url_id
+
+            doc_ids[content.original_path] = doc_id
+
+        # Initialize ProseMirror generator with document mapping
+        self._prosemirror_generator = ProseMirrorDocumentGenerator(document_mapping)
+
+        # Process all documents and folders
+        documents = {}
+        attachments = {}
+        all_warnings = []
+
+        # Create folder documents
+        for folder in self._iterate_folders(folder_structure):
+            folder_doc = self._create_folder_document(
+                folder, folder_doc_ids, current_time
+            )
+            documents[folder_doc["id"]] = folder_doc
+
+        # Create content documents with parent references
+        for content in contents:
+            doc_id = doc_ids[content.original_path]
+
+            # Find parent folder document ID
+            parent_folder = self._find_parent_folder(
+                content.original_path, folder_structure
+            )
+            parent_doc_id = (
+                folder_doc_ids.get(parent_folder.path) if parent_folder else None
+            )
+
+            document = self._create_document_with_parent(
+                content, doc_id, parent_doc_id, current_time
+            )
+            documents[doc_id] = document
+
+            # Process assets
+            for asset in content.assets:
+                attachment_id = str(uuid.uuid4())
+                attachment = self._create_attachment(asset, attachment_id, doc_id)
+                attachments[attachment_id] = attachment
+
+            all_warnings.extend(content.warnings)
+
+        # Build document structure for the collection
+        document_structure = self._build_nested_document_structure(
+            folder_structure, folder_doc_ids, doc_ids, contents
+        )
+
+        # Create single collection containing all documents
+        collection = self._create_collection(
+            collection_id, vault_name, document_structure, current_time
+        )
+
+        return OutlinePackage(
+            metadata=metadata,
+            collections=[collection],
+            documents=documents,
+            attachments=attachments,
+            warnings=all_warnings,
+        )
+
+    def _iterate_folders(self, folder: FolderStructure) -> List[FolderStructure]:
+        """Recursively iterate through all folders."""
+        folders = [folder]
+        for child in folder.child_folders:
+            folders.extend(self._iterate_folders(child))
+        return folders
+
+    def _find_parent_folder(
+        self, file_path: Path, folder_structure: FolderStructure
+    ) -> Optional[FolderStructure]:
+        """Find the folder containing a given file."""
+
+        def search_folder(folder: FolderStructure) -> Optional[FolderStructure]:
+            if file_path in folder.markdown_files:
+                return folder
+            for child in folder.child_folders:
+                result = search_folder(child)
+                if result:
+                    return result
+            return None
+
+        return search_folder(folder_structure)
+
+    def _create_folder_document(
+        self,
+        folder: FolderStructure,
+        folder_doc_ids: Dict[Path, str],
+        current_time: str,
+    ) -> Dict[str, Any]:
+        """Create a document representing a folder."""
+        # Find parent document ID
+        parent_doc_id = None
+        if folder.parent_path and folder.parent_path in folder_doc_ids:
+            parent_doc_id = folder_doc_ids[folder.parent_path]
+
+        # Create minimal content for folder document
+        folder_content = f"# {folder.name}\n\nThis folder contains related documents."
+        prosemirror_doc = self._prosemirror_generator.convert_markdown(folder_content)
+
+        truncated_name = self._truncate_for_database(folder.name, 100, "folder name")
+
+        return {
+            "id": folder_doc_ids[folder.path],
+            "urlId": self._generate_url_id(folder.name),
+            "title": truncated_name,
+            "icon": "📁",  # Folder icon
+            "color": None,
+            "data": {"type": prosemirror_doc.type, "content": prosemirror_doc.content},
+            "createdById": str(uuid.uuid4()),
+            "createdByName": "Obsidian Exporter",
+            "createdByEmail": "export@obsidian-exporter.local",
+            "createdAt": current_time,
+            "updatedAt": current_time,
+            "publishedAt": current_time,
+            "fullWidth": False,
+            "template": False,
+            "parentDocumentId": parent_doc_id,
+        }
+
+    def _create_document_with_parent(
+        self,
+        content: TransformedContent,
+        doc_id: str,
+        parent_doc_id: Optional[str],
+        current_time: str,
+    ) -> Dict[str, Any]:
+        """Create document with parent reference."""
+        document = self._create_document(content, doc_id, current_time)
+        document["parentDocumentId"] = parent_doc_id
+        return document
+
+    def _build_nested_document_structure(
+        self,
+        folder: FolderStructure,
+        folder_doc_ids: Dict[Path, str],
+        doc_ids: Dict[Path, str],
+        all_contents: List[TransformedContent],
+    ) -> List[Dict[str, Any]]:
+        """Build nested document structure for navigation."""
+
+        def build_folder_node(folder: FolderStructure) -> Dict[str, Any]:
+            folder_id = folder_doc_ids[folder.path]
+
+            # Build children list
+            children = []
+
+            # Add child folders
+            for child_folder in folder.child_folders:
+                children.append(build_folder_node(child_folder))
+
+            # Add documents in this folder
+            for file_path in folder.markdown_files:
+                if file_path in doc_ids:
+                    # Find the content for this file
+                    content = next(
+                        (c for c in all_contents if c.original_path == file_path), None
+                    )
+                    if content:
+                        doc_id = doc_ids[file_path]
+                        title = content.metadata.get("title")
+                        if not title:
+                            title = file_path.stem.replace("_", " ").replace("-", " ")
+                            words = title.split()
+                            title = " ".join(word.capitalize() for word in words)
+
+                        url_id = self._generate_url_id(title)
+                        doc_url = f"/doc/{title.lower().replace(' ', '-')}-{url_id}"
+                        children.append(
+                            {
+                                "id": doc_id,
+                                "url": doc_url,
+                                "title": title,
+                                "children": [],
+                            }
+                        )
+
+            return {
+                "id": folder_id,
+                "url": (
+                    f"/doc/{folder.name.lower().replace(' ', '-')}-"
+                    f"{self._generate_url_id(folder.name)}"
+                ),
+                "title": folder.name,
+                "children": children,
+            }
+
+        # Build from root folder
+        return build_folder_node(folder).get("children", [])
 
     def _create_attachment(
         self, asset_path: Path, attachment_id: str, document_id: str

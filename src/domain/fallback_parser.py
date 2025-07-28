@@ -289,10 +289,6 @@ class FallbackParser:
         for line in content.split("\n"):
             # Count leading '>' characters
             match = re.match(r"^(>\s*)+", line)
-            level = (
-                len(match.group(0).replace(" ", ""))
-                if match
-                else 0
-            )
+            level = len(match.group(0).replace(" ", "")) if match else 0
             max_level = max(max_level, level)
         return max_level
